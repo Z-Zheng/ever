@@ -1,5 +1,5 @@
 ## EVer - A Library for Earth Vision Researcher
-----------------------------------------------------------------
+
 
 EVer is a Pytorch-based Python library to simplify the training and inference of the deep learning model.
 
