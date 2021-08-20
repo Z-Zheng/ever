@@ -49,4 +49,6 @@ in Remote Sensing Imagery, ICCV 2021. [[`Paper`](https://arxiv.org/abs/2108.0700
 
 
 ## License
-EVer is released under the 
+EVer is released under the [Apache License 2.0](https://github.com/Z-Zheng/ever/blob/master/LICENSE).
+
+Copyright (c) Zhuo Zheng. All rights reserved.
