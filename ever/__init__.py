@@ -23,4 +23,4 @@ __all__ = [
     'Transform', 'MultiTransform',
 ]
 __internal_version__ = '1.5.4'
-__version__ = "0.1.0"
+__version__ = "0.2.2"

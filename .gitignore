@@ -2,3 +2,6 @@
 .idea
 /dev
 /projects/
+build/
+dist/
+ever.egg-info/

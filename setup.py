@@ -20,12 +20,13 @@ install_requires = [
     'scikit-image',
     'scipy',
     'matplotlib',
-    'tqdm'
+    'tqdm',
+    'pandas'
 ]
 setup(
-    name='ever',
+    name='ever_beta',
     version=get_version(),
-    description='A Library Earth Vision Researcher',
+    description='A Library for Earth Vision Researcher',
     keywords='Remote Sensing, '
              'Earth Vision, '
              'Deep Learning, '

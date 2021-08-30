@@ -15,15 +15,16 @@ EVer is a Pytorch-based Python library to simplify the training and inference of
 
 ## Installation
 
+### stable version (0.2.2)
+```bash
+pip install ever-beta==0.2.2
+```
+
 ### nightly version (master)
 ```bash
 pip install --upgrade git+https://github.com/Z-Zheng/ever.git
 ```
 
-### reinstall ever
-```bash
-pip install --upgrade --no-deps --force-reinstall git+https://github.com/Z-Zheng/ever.git
-```
 
 ## Getting Started
 [Basic Usage](https://github.com/Z-Zheng/ever/tree/master/docs/USAGE.md)
