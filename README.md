@@ -15,9 +15,9 @@ EVer is a Pytorch-based Python library to simplify the training and inference of
 
 ## Installation
 
-### stable version (0.2.2)
+### stable version (0.2.3)
 ```bash
-pip install ever-beta==0.2.2
+pip install ever-beta
 ```
 
 ### nightly version (master)
