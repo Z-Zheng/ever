@@ -55,12 +55,12 @@ def dice_loss_with_logits(y_pred: torch.Tensor, y_true: torch.Tensor,
         return 1. - dice_coeff(y_prob, y_true, weight, smooth_value)
 
 
-def iou(y_pred, y_true, weights: torch.Tensor, smooth_value: float = 1.0, ):
+def jaccard_score(y_pred, y_true, weights: torch.Tensor, smooth_value: float = 1.0, ):
     y_pred = y_pred[:, weights]
     y_true = y_true[:, weights]
     inter = torch.sum(y_pred * y_true, dim=0)
     z = y_pred.sum(dim=0) + y_true.sum(dim=0) - inter + smooth_value
-    return ((2 * inter + smooth_value) / z).mean()
+    return ((inter + smooth_value) / z).mean()
 
 
 @torch.jit.script
@@ -73,14 +73,14 @@ def jaccard_loss_with_logits(y_pred: torch.Tensor, y_true: torch.Tensor,
     weight = torch.as_tensor([True] * c, device=y_pred.device)
     if c == 1:
         y_prob = y_pred.sigmoid()
-        return 1. - iou(y_prob, y_true.reshape(-1, 1), weight, smooth_value)
+        return 1. - jaccard_score(y_prob, y_true.reshape(-1, 1), weight, smooth_value)
     else:
         y_prob = y_pred.softmax(dim=1)
         y_true = F.one_hot(y_true, num_classes=c)
         if ignore_channel != -1:
             weight[ignore_channel] = False
 
-        return 1. - iou(y_prob, y_true, weight, smooth_value)
+        return 1. - jaccard_score(y_prob, y_true, weight, smooth_value)
 
 
 @torch.jit.script
