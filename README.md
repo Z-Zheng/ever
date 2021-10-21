@@ -1,5 +1,5 @@
 ## EVer - A Library for Earth Vision Researcher
-
+[![Downloads](https://pepy.tech/badge/ever-beta)](https://pepy.tech/project/ever-beta)
 
 EVer is a Pytorch-based Python library to simplify the training and inference of the deep learning model.
 
