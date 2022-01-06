@@ -32,6 +32,7 @@ pip install --upgrade git+https://github.com/Z-Zheng/ever.git
 ## Projects using EVer or [SimpleCV](https://github.com/Z-Zheng/SimpleCV)
 
 ### Change Detection
+- ChangeMask: Deep Multi-task Encoder-Transformer-Decoder Architecture for Semantic Change Detection, ISPRS P&RS 2021. [[`Paper`](https://www.sciencedirect.com/science/article/pii/S0924271621002835)]
 - Change is Everywhere: Single-Temporal Supervised Object Change Detection
 in Remote Sensing Imagery, ICCV 2021. [[`Paper`](https://arxiv.org/abs/2108.07002)], [[`Project`](https://zhuozheng.top/changestar/)], [[`Code`](https://github.com/Z-Zheng/ChangeStar)]
 

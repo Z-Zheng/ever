@@ -36,22 +36,12 @@ def half_bn(m):
 
 
 class Trainer(object):
-    def __init__(self):
-        self._args = None
+    def __init__(self, args):
+        self._args = args
         self._cfg = None
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("--local_rank", type=int)
-        self.parser.add_argument('--config_path', default=None, type=str,
-                                 help='path to config file')
-        self.parser.add_argument('--model_dir', default=None, type=str,
-                                 help='path to model directory')
 
-        self.parser.add_argument(
-            "opts",
-            help="Modify config options using the command-line",
-            default=None,
-            nargs=argparse.REMAINDER,
-        )
+    def __call__(self):
+        return self
 
     @property
     def device(self):
@@ -59,18 +49,6 @@ class Trainer(object):
 
     @property
     def args(self):
-        if self._args:
-            return self._args
-        self._args = self.parser.parse_args()
-        assert self._args.config_path is not None, 'The `config_path` is needed'
-        assert self._args.model_dir is not None, 'The `model_dir` is needed'
-        os.makedirs(self._args.model_dir, exist_ok=True)
-        if self._args.config_path.endswith('.py'):
-            shutil.copy(self._args.config_path, os.path.join(self._args.model_dir, 'config.py'))
-        else:
-            cfg_path_segs = ['configs'] + self._args.config_path.split('.')
-            cfg_path_segs[-1] = cfg_path_segs[-1] + '.py'
-            shutil.copy(os.path.join(os.path.curdir, *cfg_path_segs), os.path.join(self._args.model_dir, 'config.py'))
         return self._args
 
     @property

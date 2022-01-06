@@ -71,8 +71,8 @@ class THAmpLauncher(Launcher):
 
 
 class THAMPDDPTrainer(trainer.Trainer):
-    def __init__(self):
-        super(THAMPDDPTrainer, self).__init__()
+    def __init__(self, args):
+        super().__init__(args)
         if torch.cuda.is_available():
             torch.cuda.set_device(self.args.local_rank)
             dist.init_process_group(
@@ -109,11 +109,13 @@ class THAMPDDPTrainer(trainer.Trainer):
                 f(tl)
 
         tl.logger.info(
-            'th sync bn: {}'.format('on' if self.config.train.get('sync_bn', False) else 'off'))
+            'th sync bn: {}'.format(
+                'on' if self.config.train.get('sync_bn', False) else 'off'))
         tl.logger.info('external parameter: {}'.format(self.args.opts))
 
         tl.train_by_config(kw_dataloader['traindata_loader'],
-                           config=trainer.merge_dict(self.config.train, self.config.test),
+                           config=trainer.merge_dict(self.config.train,
+                                                     self.config.test),
                            test_data_loader=kw_dataloader['testdata_loader'])
 
         return dict(config=self.config, launcher=tl)

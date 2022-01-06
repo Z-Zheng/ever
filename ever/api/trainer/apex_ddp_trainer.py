@@ -15,10 +15,8 @@ except ImportError:
 
 
 class ApexDDPTrainer(trainer.Trainer):
-    def __init__(self):
-        super(ApexDDPTrainer, self).__init__()
-        self.parser.add_argument('--opt_level', type=str, default='O0', help='O0, O1, O2, O3')
-        self.parser.add_argument('--keep_batchnorm_fp32', type=bool, default=None, help='')
+    def __init__(self, args):
+        super().__init__(args)
 
         self.OPT_LEVELS = ['O0', 'O1', 'O2', 'O3']
 
@@ -60,13 +58,16 @@ class ApexDDPTrainer(trainer.Trainer):
             for f in after_construct_launcher_callbacks:
                 f(tl)
 
-        tl.logger.info('[NVIDIA/apex] amp optimizer. opt_level = {}'.format(self.args.opt_level))
         tl.logger.info(
-            '[NVIDIA/apex] sync bn: {}'.format('on' if self.config.train.get('apex_sync_bn', False) else 'off'))
+            '[NVIDIA/apex] amp optimizer. opt_level = {}'.format(self.args.opt_level))
+        tl.logger.info(
+            '[NVIDIA/apex] sync bn: {}'.format(
+                'on' if self.config.train.get('apex_sync_bn', False) else 'off'))
         tl.logger.info('external parameter: {}'.format(self.args.opts))
         tl.override_backward(default_backward.amp_backward)
         tl.train_by_config(kw_dataloader['traindata_loader'],
-                           config=trainer.merge_dict(self.config.train, self.config.test),
+                           config=trainer.merge_dict(self.config.train,
+                                                     self.config.test),
                            test_data_loader=kw_dataloader['testdata_loader'])
 
         return dict(config=self.config, launcher=tl)

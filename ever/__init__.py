@@ -22,5 +22,5 @@ __all__ = [
     'ERDataLoader', 'LearningRateBase', 'ERModule',
     'Transform', 'MultiTransform',
 ]
-__internal_version__ = '1.5.4'
-__version__ = "0.2.3"
+__internal_version__ = '1.7.0'
+__version__ = "0.3.0"

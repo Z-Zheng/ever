@@ -8,8 +8,8 @@ from ever.util import param_util
 
 
 class THDDPTrainer(trainer.Trainer):
-    def __init__(self):
-        super(THDDPTrainer, self).__init__()
+    def __init__(self, args):
+        super().__init__(args)
 
         if torch.cuda.is_available():
             torch.cuda.set_device(self.args.local_rank)
