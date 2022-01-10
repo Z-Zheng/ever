@@ -157,6 +157,7 @@ class Launcher(object):
         iterator_type = kwargs.get('iterator_type', 'normal')
         save_ckpt_interval_epoch = kwargs.get('save_ckpt_interval_epoch', 1)
         eval_interval_epoch = kwargs.get('eval_interval_epoch', 1)
+        log_model_dir_interval_step = kwargs.get('task_log_interval_step', 500)
 
         iterator = get_iterator(iterator_type)(train_data_loader)
 
@@ -198,6 +199,8 @@ class Launcher(object):
                                        num_iters=num_iters,
                                        tensorboard_interval_step=tensorboard_interval_step,
                                        log_interval_step=log_interval_step)
+                if (log_model_dir_interval_step > 0) and (self._ckpt.global_step % log_model_dir_interval_step == 0):
+                    self._logger.info(self.model_dir)
 
                 if summary_weights and self._ckpt.global_step % tensorboard_interval_step == 0:
                     self._logger.summary_weights(module=self.model.module, step=self._ckpt.global_step)
