@@ -2,11 +2,11 @@ import re
 
 import torch
 import torch.nn as nn
+from torch.nn.utils import clip_grad
 
-from ever.core import checkpoint, logger
+import ever as er
+from ever.core import checkpoint
 from ever.interface.configurable import ConfigurableMixin
-
-_logger = logger.get_logger()
 
 
 class ERModule(nn.Module, ConfigurableMixin):
@@ -38,7 +38,8 @@ class ERModule(nn.Module, ConfigurableMixin):
         if self.config.GLOBAL.weight.path is None:
             return
 
-        state_dict = torch.load(self.config.GLOBAL.weight.path, map_location=lambda storage, loc: storage)
+        state_dict = torch.load(self.config.GLOBAL.weight.path,
+                                map_location=lambda storage, loc: storage)
         if checkpoint.is_checkpoint(state_dict):
             state_dict = state_dict[checkpoint.CheckPoint.MODEL]
         ret = {}
@@ -55,8 +56,40 @@ class ERModule(nn.Module, ConfigurableMixin):
                 continue
             ret[k] = v
 
-        self.load_state_dict(ret, strict=False)
-        _logger.info('Load weights from: {}'.format(self.config.GLOBAL.weight.path))
+        IncompatibleKeys = self.load_state_dict(ret, strict=False)
+        er.info('Load weights from: {}'.format(self.config.GLOBAL.weight.path))
+        er.info(f'missing_keys ({len(IncompatibleKeys.missing_keys)}): {IncompatibleKeys.missing_keys}')
+        er.info(f'unexpected_keys ({len(IncompatibleKeys.unexpected_keys)}): {IncompatibleKeys.unexpected_keys}')
 
     def log_info(self):
         return dict()
+
+    def custom_param_groups(self):
+        return [{'params': self.parameters()}, ]
+
+    def backward(self, loss_dict, amp, **kwargs):
+        total_loss = sum([e for e in loss_dict.values()])
+        if amp:
+            kwargs['scaler'].scale(total_loss).backward()
+        else:
+            total_loss.backward()
+
+    def apply_gradients(self, optimizer, amp, **kwargs):
+        if amp:
+            kwargs['scaler'].unscale_(optimizer)
+            self.clip_grad(optimizer)
+            kwargs['scaler'].step(optimizer)
+            kwargs['scaler'].update()
+        else:
+            self.clip_grad(optimizer)
+            optimizer.step()
+
+        optimizer.zero_grad()
+
+    def clip_grad(self, optimizer):
+        if 'grad_clip' in optimizer.er_config:
+            grad_clip_config = optimizer.er_config.get('grad_clip',
+                                                       dict(max_norm=35, norm_type=2))
+            clip_grad.clip_grad_norm_(
+                filter(lambda p: p.requires_grad, self.parameters()),
+                **grad_clip_config)

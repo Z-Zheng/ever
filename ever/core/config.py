@@ -3,10 +3,12 @@ import os
 import pprint
 import sys
 import warnings
+import copy
 from ast import literal_eval
 from collections import OrderedDict
+import pickle
 
-__all__ = ['import_config', 'AttrDict']
+__all__ = ['import_config', 'AttrDict', 'from_dict']
 
 
 # from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
@@ -22,11 +24,24 @@ def _import_file(module_name, file_path, make_importable=False):
 def import_config(config_name_or_path: str, prefix='configs'):
     if config_name_or_path.endswith('.py'):
         m = _import_file('ever.cfg', config_name_or_path)
+    elif config_name_or_path.endswith('.pkl'):
+        return from_pickle(config_name_or_path)
     else:
         cfg_path_segs = [prefix] + config_name_or_path.split('.')
         cfg_path_segs[-1] = cfg_path_segs[-1] + '.py'
         m = _import_file('ever.cfg', os.path.join(os.path.curdir, *cfg_path_segs))
     return AttrDict.from_dict(m.config)
+
+
+def from_dict(dict):
+    ad = AttrDict()
+    ad.update(dict)
+    return ad
+
+
+def from_pickle(filepath):
+    with open(filepath, 'rb') as f:
+        return pickle.load(f)
 
 
 class AttrDict(OrderedDict):
@@ -52,8 +67,12 @@ class AttrDict(OrderedDict):
         for k, v in config.items():
             if k not in self:
                 self[k] = AttrDict()
+
             if isinstance(v, dict):
+                if not isinstance(self[k], dict):
+                    self[k] = AttrDict()
                 self[k].update(v)
+
             elif isinstance(v, list) and all([isinstance(i, dict) for i in v]):
                 self[k] = [AttrDict.from_dict(i) for i in v]
             else:
@@ -66,7 +85,12 @@ class AttrDict(OrderedDict):
             item = None
             last_key = key_list.pop()
             for sub_key in key_list:
-                item = self[sub_key] if item is None else item[sub_key]
+                if item is None:
+                    item = self[sub_key]
+                else:
+                    if isinstance(item, list) and sub_key.isdigit():
+                        sub_key = int(sub_key)
+                    item = item[sub_key]
             try:
                 item[last_key] = literal_eval(value)
             except:
@@ -76,6 +100,9 @@ class AttrDict(OrderedDict):
     def __str__(self):
         return pprint.pformat(self)
 
-    def to_file(self, save_path):
-        with open(save_path, 'w') as f:
-            f.write(str(self))
+    def deepcopy(self):
+        return copy.deepcopy(self)
+
+    def to_pickle(self, filepath):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)

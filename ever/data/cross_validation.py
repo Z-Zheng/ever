@@ -5,8 +5,8 @@ import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import SubsetRandomSampler, Sampler
 
-from ever.api.data.distributed import StepDistributedRandomSubsetSampler
-
+from ever.data.distributed import StepDistributedRandomSubsetSampler
+from ever.data.distributed import DistributedNonOverlapSubsetSeqSampler
 __all__ = [
     'CrossValSamplerGenerator',
     'make_CVSamplers'
@@ -57,7 +57,8 @@ class CrossValSamplerGenerator(object):
 
         indices = torch.randperm(self.num_samples, generator=g).tolist()
         total_size = int(math.ceil(len(indices) / k) * k)
-        indices += indices[1:(1 + total_size - len(indices))]
+        offset = k - (total_size - self.num_samples)
+        indices += indices[offset:(offset + total_size - len(indices))]
 
         assert len(indices) == total_size
 
@@ -72,7 +73,7 @@ class CrossValSamplerGenerator(object):
 
             if self.distributed:
                 sampler_pairs.append((StepDistributedRandomSubsetSampler(train_indices),
-                                      SubsetSampler(val_indices)))
+                                      DistributedNonOverlapSubsetSeqSampler(val_indices)))
             else:
                 sampler_pairs.append((SubsetRandomSampler(train_indices), SubsetSampler(val_indices)))
 

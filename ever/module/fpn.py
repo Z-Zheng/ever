@@ -143,10 +143,9 @@ class AssymetricDecoder(nn.Module):
                  classifier_config=None):
         super(AssymetricDecoder, self).__init__()
         self.cls_cfg = classifier_config
-        if norm_fn == nn.BatchNorm2d:
-            norm_fn_args = dict(num_features=out_channels)
-        else:
-            raise ValueError('Type of {} is not support.'.format(type(norm_fn)))
+
+        norm_fn_args = dict(num_features=out_channels)
+
         self.blocks = nn.ModuleList()
         for in_feat_os in in_feat_output_strides:
             num_upsample = int(math.log2(int(in_feat_os))) - int(math.log2(int(out_feat_output_stride)))
@@ -196,7 +195,7 @@ class Fusion(nn.Module):
         self.weights = nn.Parameter(torch.Tensor(num_inputs))
         assert norm_method in ['softmax', 'fast_normalize']
         if 'softmax' == norm_method:
-            self.norm_fn = lambda x: F.softmax(F.relu(x), dim=0).view(num_inputs, 1, 1, 1, 1)
+            self.norm_fn = lambda x: F.softmax(x, dim=0).view(num_inputs, 1, 1, 1, 1)
         elif 'fast_normalize' == norm_method:
             def _fast_normalize(x):
                 x = F.relu(x)

@@ -4,15 +4,50 @@ import time
 from abc import abstractmethod, ABCMeta
 from collections import deque
 
+import wandb
+from ever.core.dist import main_process_only
 import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
 
-def get_logger(name=__name__):
-    logger = logging.getLogger(name)
+@main_process_only
+def info(msg):
+    if _logger is not None:
+        _logger.info(msg)
+    else:
+        _default_logger.info(msg)
+
+
+def get_logger(name=__name__, file_path=None, create_global=False):
+    logger = logging.Logger(name)
     logger.setLevel(level=logging.INFO)
-    return logger
+
+    logger.handlers = []
+    BASIC_FORMAT = "%(asctime)s, %(levelname)s:%(name)s:%(message)s"
+    DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(BASIC_FORMAT, DATE_FORMAT)
+
+    chlr = logging.StreamHandler()
+    chlr.setFormatter(formatter)
+    chlr.setLevel(level=logging.INFO)
+    logger.addHandler(chlr)
+    if file_path:
+        fhlr = logging.FileHandler(file_path)
+        fhlr.setFormatter(formatter)
+        logger.addHandler(fhlr)
+
+    if create_global:
+        global _logger
+        if _logger is None:
+            _logger = logger
+        return _logger
+    else:
+        return logger
+
+
+_default_logger = get_logger('EVER')
+_logger: logging.Logger = None
 
 
 def get_console_file_logger(name, level, logdir):
@@ -31,7 +66,11 @@ def get_console_file_logger(name, level, logdir):
     logger.addHandler(chlr)
     logger.addHandler(fhlr)
 
-    return logger
+    global _logger
+    if _logger is None:
+        _logger = logger
+
+    return _logger
 
 
 class TrainLogHook(metaclass=ABCMeta):
@@ -74,10 +113,9 @@ class Logger(object):
                  name,
                  level=logging.INFO,
                  use_tensorboard=False,
-                 tensorboard_logdir=None):
-        # self._logger = logging.getLogger(name)
+                 tensorboard_logdir=None,
+                 ):
         self._level = level
-        # self._logger.setLevel(level)
         self._logger = get_console_file_logger(name, level, tensorboard_logdir)
         self.use_tensorboard = use_tensorboard
         if self.use_tensorboard and tensorboard_logdir is None:
@@ -88,6 +126,38 @@ class Logger(object):
         self.smoothvalues = dict()
 
         self._train_log_hooks = []
+
+    def finish(self):
+        if self.use_wandb:
+            wandb.finish()
+
+    @property
+    def use_wandb(self):
+        return wandb.run is not None
+
+    @main_process_only
+    def init_wandb(self, project, name, wandb_dir, config=None):
+        wandb.login()
+        wandb.init(
+            project=project,
+            dir=wandb_dir,
+            name=name,
+            config=config,
+        )
+
+    @main_process_only
+    def wandb_summary(self, loss_dict: dict, lr, step: int):
+        assert self.use_wandb
+        log_dict = {}
+        for name, value in loss_dict.items():
+            log_dict[name] = value
+
+        if isinstance(lr, dict):
+            for name, value in lr.items():
+                log_dict[f'lr/{name}'] = value
+        else:
+            log_dict['lr'] = lr
+        wandb.log(log_dict, step=step)
 
     def create_or_get_smoothvalues(self, value_dict: dict):
         for key, value in value_dict.items():
@@ -124,6 +194,7 @@ class Logger(object):
 
     def train_log(self,
                   step,
+                  epoch,
                   loss_dict,
                   time_cost,
                   data_time,
@@ -135,7 +206,7 @@ class Logger(object):
         loss_info = ''.join(
             ['{name} = {value}, '.format(name=name, value=str(round(value, 6)).ljust(6, '0')) for name, value in
              smooth_loss_dict.items()])
-        step_info = 'step: {}, '.format(int(step))
+        step_info = f'step: {int(step)}({epoch}), '
         # eta
         smooth_time_cost = self.create_or_get_smoothvalues({'time_cost': time_cost})['time_cost']
         smooth_data_time = self.create_or_get_smoothvalues({'data_time': data_time})['data_time']
@@ -151,13 +222,20 @@ class Logger(object):
             time_cost_info = '({} sec / step, data: {} sec)'.format(round(smooth_time_cost, 3),
                                                                     round(smooth_data_time, 3))
 
-        lr_info = 'lr = {}, '.format(str(round(lr, 6)))
+        if isinstance(lr, dict):
+            lr_info = ''
+            for k, v in lr.items():
+                lr_info += f'{k}_lr = {str(round(v, 6))}, '
+        else:
+            lr_info = 'lr = {}, '.format(str(round(lr, 6)))
         msg = '{loss}{lr}{step}{time}'.format(loss=loss_info,
                                               step=step_info,
                                               lr=lr_info,
                                               time=time_cost_info)
         if step % log_interval_step == 0:
             self._logger.info(msg)
+            if self.use_wandb:
+                self.wandb_summary(smooth_loss_dict, lr, step)
 
         if self.use_tensorboard and step % tensorboard_interval_step == 0:
             self.train_summary(step, smooth_loss_dict, time_cost, lr)
@@ -174,7 +252,12 @@ class Logger(object):
             self.summary_w.add_scalar('loss/{}'.format(name), float(value), global_step=step)
 
         self.summary_w.add_scalar('sec_per_step', float(time_cost), global_step=step)
-        self.summary_w.add_scalar('learning_rate', float(lr), global_step=step)
+
+        if isinstance(lr, dict):
+            for name, v in lr.items():
+                self.summary_w.add_scalar(f'learning_rate/{name}', float(v), global_step=step)
+        else:
+            self.summary_w.add_scalar('learning_rate', float(lr), global_step=step)
 
     def eval_log(self, metric_dict, step=None):
         for name, value in metric_dict.items():

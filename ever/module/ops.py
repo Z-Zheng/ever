@@ -9,16 +9,18 @@ class DepthwiseConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1,
                  bias=True, padding_mode='zeros'):
+        assert in_channels == out_channels
         super(DepthwiseConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation,
                                               in_channels, bias, padding_mode)
 
 
 class SeparableConv2d(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, bias=True, padding_mode='zeros'):
+                 padding=0, dilation=1, bias=True, padding_mode='zeros', activation=None):
         super(SeparableConv2d, self).__init__(
             nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding, dilation, groups=in_channels,
                       bias=False, padding_mode=padding_mode),
+            activation if activation else nn.Identity(),
             nn.Conv2d(in_channels, out_channels, 1, bias=bias)
         )
 
@@ -26,7 +28,7 @@ class SeparableConv2d(nn.Sequential):
 class ConvBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1,
-                 bias=True,
+                 bias=False,
                  bn=True,
                  relu=True,
                  init_fn=None):
@@ -48,7 +50,7 @@ class ConvBlock(nn.Sequential):
 class SeparableConvBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1,
-                 bias=True,
+                 bias=False,
                  bn=True,
                  relu=True,
                  init_fn=None):

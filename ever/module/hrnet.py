@@ -48,16 +48,6 @@ class HRNetEncoder(ERModule):
                                         64, kernel_size=3, stride=2, padding=1,
                                         bias=False))
 
-    # stage 1
-    @property
-    def stage1(self):
-        return self.hrnet.stage1
-
-    @stage1.setter
-    def stage1(self, value):
-        del self.hrnet.stage1
-        self.hrnet.stage1 = value
-
     # stage 2
     @property
     def stage2(self):

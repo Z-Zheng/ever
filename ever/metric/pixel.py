@@ -5,10 +5,45 @@ import numpy as np
 import prettytable as pt
 import pandas as pd
 
-from ever.api.metric.confusion_matrix import ConfusionMatrix
+from ever.metric.confusion_matrix import ConfusionMatrix
 from ever.core.logger import get_console_file_logger
+from ever.core.dist import is_main_process, all_gather
 
 EPS = 1e-7
+
+
+class AccTable(pt.PrettyTable):
+    @staticmethod
+    def _get_data(data, class_index=None):
+        if isinstance(class_index, int):
+            return data[class_index]
+        elif isinstance(class_index, list) or isinstance(class_index, tuple):
+            return [data[c] for c in class_index]
+        else:
+            return data
+
+    def f1(self, class_index=None):
+        return self.get('f1', class_index)
+
+    def iou(self, class_index=None):
+        return self.get('iou', class_index)
+
+    def precision(self, class_index=None):
+        return self.get('precision', class_index)
+
+    def recall(self, class_index=None):
+        return self.get('recall', class_index)
+
+    def get(self, col_name, row_index):
+        idx = self.field_names.index(col_name)
+        data = [r[idx] for r in self._rows]
+        return self._get_data(data, row_index)
+
+    def to_dataframe(self):
+        return prettytable_to_dataframe(self)
+
+    def to_csv(self, csv_file):
+        prettytable_to_csv(self, csv_file)
 
 
 class PixelMetric(ConfusionMatrix):
@@ -18,7 +53,8 @@ class PixelMetric(ConfusionMatrix):
             os.makedirs(logdir, exist_ok=True)
         self.logdir = logdir
         if logdir is not None and logger is None:
-            self._logger = get_console_file_logger('PixelMetric', logging.INFO, self.logdir)
+            self._logger = get_console_file_logger('PixelMetric', logging.INFO,
+                                                   self.logdir)
         elif logger is not None:
             self._logger = logger
         else:
@@ -92,12 +128,22 @@ class PixelMetric(ConfusionMatrix):
         if self.logger is not None:
             self.logger.info('\n' + table.get_string())
             if self.logdir is not None:
-                np.save(os.path.join(self.logdir, 'confusion_matrix-{time}.npy'.format(time=time.time())), dense_cm)
+                time_str = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+                times = time.time()
+
+                cm_dir = os.path.join(self.logdir, 'cm')
+                os.makedirs(cm_dir, exist_ok=True)
+
+                np.save(os.path.join(cm_dir,
+                                     'confusion_matrix-{time}-{times}.npy'.format(
+                                         time=time_str, times=times)),
+                        dense_cm)
         else:
             print(table)
 
     def summary_iou(self):
         dense_cm = self._total.toarray()
+        dense_cm = sum(all_gather(dense_cm))
         iou_per_class = PixelMetric.compute_iou_per_class(dense_cm)
         miou = iou_per_class.mean()
 
@@ -107,30 +153,36 @@ class PixelMetric(ConfusionMatrix):
             tb.add_row([idx, iou])
         tb.add_row(['mIoU', miou])
 
-        self._log_summary(tb, dense_cm)
+        if is_main_process():
+            self._log_summary(tb, dense_cm)
 
         return tb
 
-    def summary_all(self, dec=5):
-        dense_cm = self._total.toarray()
+    def summary_all(self, dense_cm=None, dec=5) -> AccTable:
+        if dense_cm is None:
+            dense_cm = self._total.toarray()
+            # handle multi-gpu case
+            dense_cm = sum(all_gather(dense_cm))
 
         iou_per_class = np.round(PixelMetric.compute_iou_per_class(dense_cm), dec)
         miou = np.round(iou_per_class.mean(), dec)
-        F1_per_class = np.round(PixelMetric.compute_F_measure_per_class(dense_cm, beta=1.0), dec)
+        F1_per_class = np.round(
+            PixelMetric.compute_F_measure_per_class(dense_cm, beta=1.0), dec)
         mF1 = np.round(F1_per_class.mean(), dec)
         overall_accuracy = np.round(PixelMetric.compute_overall_accuracy(dense_cm), dec)
         kappa = np.round(PixelMetric.cohen_kappa_score(dense_cm), dec)
 
-        precision_per_class = np.round(PixelMetric.compute_precision_per_class(dense_cm), dec)
+        precision_per_class = np.round(
+            PixelMetric.compute_precision_per_class(dense_cm), dec)
         mprec = np.round(precision_per_class.mean(), dec)
         recall_per_class = np.round(PixelMetric.compute_recall_per_class(dense_cm), dec)
         mrecall = np.round(recall_per_class.mean(), dec)
 
-        tb = pt.PrettyTable()
         if self._class_names:
-            tb.field_names = ['name', 'class', 'iou', 'f1', 'precision', 'recall']
+            tb = AccTable(field_names=['name', 'class', 'iou', 'f1', 'precision', 'recall'])
             for idx, (iou, f1, precision, recall) in enumerate(
-                    zip(iou_per_class, F1_per_class, precision_per_class, recall_per_class)):
+                    zip(iou_per_class, F1_per_class, precision_per_class,
+                        recall_per_class)):
                 tb.add_row([self._class_names[idx], idx, iou, f1, precision, recall])
 
             tb.add_row(['', 'mean', miou, mF1, mprec, mrecall])
@@ -138,16 +190,18 @@ class PixelMetric(ConfusionMatrix):
             tb.add_row(['', 'Kappa', kappa, '-', '-', '-'])
 
         else:
-            tb.field_names = ['class', 'iou', 'f1', 'precision', 'recall']
+            tb = AccTable(field_names=['class', 'iou', 'f1', 'precision', 'recall'])
             for idx, (iou, f1, precision, recall) in enumerate(
-                    zip(iou_per_class, F1_per_class, precision_per_class, recall_per_class)):
+                    zip(iou_per_class, F1_per_class, precision_per_class,
+                        recall_per_class)):
                 tb.add_row([idx, iou, f1, precision, recall])
 
             tb.add_row(['mean', miou, mF1, mprec, mrecall])
             tb.add_row(['OA', overall_accuracy, '-', '-', '-'])
             tb.add_row(['Kappa', kappa, '-', '-', '-'])
 
-        self._log_summary(tb, dense_cm)
+        if is_main_process():
+            self._log_summary(tb, dense_cm)
 
         return tb
 

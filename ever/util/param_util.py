@@ -11,14 +11,15 @@ logger = get_logger(__name__)
 
 
 def trainable_parameters(module, _default_logger=logger):
-    ret = []
-    total = 0
-    for idx, p in enumerate(module.parameters()):
+    cnt = 0
+    for p in module.parameters():
         if p.requires_grad:
-            ret.append(p)
-        total = idx + 1
-    _default_logger.info('[trainable params] {}/{}'.format(len(ret), total))
-    return ret
+            if len(p.shape) == 0:
+                cnt += 1
+            else:
+                cnt += reduce(lambda x, y: x * y, list(p.shape))
+    _default_logger.info('#trainable params: {}, {} M'.format(cnt, round(cnt / float(1e6), 3)))
+    return cnt
 
 
 def count_model_parameters(module, _default_logger=logger):
@@ -144,7 +145,7 @@ def count_model_flops(model, x):
     return total_macs
 
 
-def onnx_based_count_model_flops(model, x):
+def onnx_based_count_model_flops(model, x, _default_logger=logger):
     try:
         from torchprofile import profile_macs
     except:
@@ -152,13 +153,13 @@ def onnx_based_count_model_flops(model, x):
         raise ModuleNotFoundError('torchprofile')
     model.eval()
     macs = profile_macs(model, x)
-    logger.info("# Mult-Adds: {}, {} B".format(macs, round(macs / 1e9, 2)))
+    _default_logger.info("# Mult-Adds: {}, {} B".format(macs, round(macs / 1e9, 2)))
     return macs
 
 
-def count_model_params_flops(model, x=torch.ones(1, 3, 256, 256)):
-    count_model_parameters(model)
-    onnx_based_count_model_flops(model, x)
+def count_model_params_flops(model, x=torch.ones(1, 3, 256, 256), _default_logger=logger):
+    count_model_parameters(model, _default_logger)
+    onnx_based_count_model_flops(model, x, _default_logger)
 
 
 def copy_conv_parameters(src: nn.Conv2d, dst: nn.Conv2d):

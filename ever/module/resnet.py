@@ -1,5 +1,6 @@
 from functools import partial
 
+import torch
 import torch.nn as nn
 from torch.utils import checkpoint as cp
 
@@ -51,6 +52,23 @@ def make_layer(block, in_channel, basic_out_channel, blocks, stride=1, dilation=
     return nn.Sequential(*layers)
 
 
+def patch_first_conv(module, new_in_channels, default_in_channels=3):
+    weight = module.weight.detach()
+    module.in_channels = new_in_channels
+
+    new_weight = torch.Tensor(
+        module.out_channels,
+        new_in_channels // module.groups,
+        *module.kernel_size
+    )
+
+    for i in range(new_in_channels):
+        new_weight[:, i] = weight[:, i % default_in_channels]
+
+    new_weight = new_weight * (default_in_channels / new_in_channels)
+    module.weight = nn.parameter.Parameter(new_weight)
+
+
 @registry.MODEL.register()
 class ResNetEncoder(ERModule):
     def __init__(self,
@@ -76,16 +94,27 @@ class ResNetEncoder(ERModule):
             self.resnet.layer3.apply(partial(self._nostride_dilate, dilate=2))
             self.resnet.layer4.apply(partial(self._nostride_dilate, dilate=4))
 
+        if self.config.in_channels != 3:
+            self.reset_in_channels(self.config.in_channels)
+
     def reset_in_channels(self, in_channels):
         if in_channels == 3:
             return
+
         if self.resnet.deep_stem:
-            self.resnet.stem.add_module('0', nn.Conv2d(in_channels, 32, 3, 2, 1, bias=False))
+            if not self.config.pretrained:
+                self.resnet.stem.add_module('0', nn.Conv2d(in_channels, 32, 3, 2, 1, bias=False))
+            else:
+                patch_first_conv(self.resnet.stem[0], in_channels)
         else:
-            self.resnet.add_module('conv1',
-                                   nn.Conv2d(in_channels,
-                                             64, kernel_size=7, stride=2, padding=3,
-                                             bias=False))
+            if not self.config.pretrained:
+                self.resnet.add_module('conv1',
+                                       nn.Conv2d(in_channels,
+                                                 64, kernel_size=7, stride=2, padding=3,
+                                                 bias=False))
+            else:
+                patch_first_conv(self.resnet.conv1, in_channels)
+        _logger.info(f'ResNetEncoder: in_channels = {in_channels}')
 
     @property
     def layer1(self):
@@ -192,6 +221,7 @@ class ResNetEncoder(ERModule):
             output_stride=32,
             with_cp=(False, False, False, False),
             norm_layer=nn.BatchNorm2d,
+            in_channels=3
         ))
 
     def train(self, mode=True):

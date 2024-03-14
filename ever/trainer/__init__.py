@@ -1,16 +1,12 @@
 import argparse
 import os
-import shutil
 
-from .dp_trainer import DPTrainer
-from .th_ddp_trainer import THDDPTrainer
-from .th_amp_ddp_trainer import THAMPDDPTrainer
+from .th_ddp_trainer import THDDPTrainer, THDDPGANTrainer
 from .trainer import Trainer
 
 TRAINER = dict(
+    gan_th_ddp=THDDPGANTrainer,
     th_ddp=THDDPTrainer,
-    th_amp_ddp=THAMPDDPTrainer,
-    dp=DPTrainer,
     base=Trainer,
 )
 
@@ -22,12 +18,19 @@ def get_default_parser():
                         help='path to config file')
     parser.add_argument('--model_dir', default=None, type=str,
                         help='path to model directory')
+
     parser.add_argument("--local_rank", type=int, default=None)
     parser.add_argument('--trainer', default='th_ddp', type=str,
-                        help='path to model directory')
-    # apex
-    parser.add_argument('--opt_level', type=str, default='O0', help='O0, O1, O2, O3')
-    parser.add_argument('--keep_batchnorm_fp32', type=bool, default=None, help='')
+                        help='type of trainer')
+    parser.add_argument('--find_unused_parameters', action='store_true',
+                        help='whether to find unused parameters')
+    parser.add_argument('--amp', action='store_true',
+                        help='whether to use automatic mixed precision (amp) training')
+    parser.add_argument('--use_wandb', action='store_true',
+                        help='whether to use wandb for logging')
+    parser.add_argument('--project', default=None, type=str,
+                        help='Project name for init wandb')
+
     # command line options
     parser.add_argument(
         "opts",
@@ -38,19 +41,7 @@ def get_default_parser():
     return parser
 
 
-def initialize_workspace(config_path, model_dir):
-    os.makedirs(model_dir, exist_ok=True)
-    if config_path.endswith('.py'):
-        shutil.copy(config_path,
-                    os.path.join(model_dir, 'config.py'))
-    else:
-        cfg_path_segs = ['configs'] + config_path.split('.')
-        cfg_path_segs[-1] = cfg_path_segs[-1] + '.py'
-        shutil.copy(os.path.join(os.path.curdir, *cfg_path_segs),
-                    os.path.join(model_dir, 'config.py'))
-
-
-def get_trainer(trainer_name=None, parser=None):
+def get_trainer(trainer_name=None, parser=None, return_args=False):
     if parser is None:
         parser = get_default_parser()
     args = parser.parse_args()
@@ -58,8 +49,8 @@ def get_trainer(trainer_name=None, parser=None):
     assert args.config_path is not None, 'The `config_path` is needed'
     assert args.model_dir is not None, 'The `model_dir` is needed'
 
-    # initialize directory
-    initialize_workspace(args.config_path, args.model_dir)
+    if args.use_wandb:
+        assert args.project is not None, '`project` is needed if you use wandb'
 
     # compatible with torchrun and torch.distributed.launch
     if args.local_rank is None:
@@ -68,8 +59,7 @@ def get_trainer(trainer_name=None, parser=None):
     if trainer_name is None:
         trainer_name = args.trainer
 
-    if trainer_name == 'apex_ddp':
-        from .apex_ddp_trainer import ApexDDPTrainer
-        TRAINER.update(dict(apex_ddp=ApexDDPTrainer))
-
-    return TRAINER[trainer_name](args)
+    if return_args:
+        return TRAINER[trainer_name](args), args
+    else:
+        return TRAINER[trainer_name](args)

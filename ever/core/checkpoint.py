@@ -3,9 +3,7 @@ import os
 from collections import OrderedDict
 
 import torch
-from ever.core.logger import get_logger, save_log, restore_log
-
-logger = get_logger(__name__)
+from ever.core.logger import save_log, restore_log
 
 
 def is_checkpoint(obj):
@@ -20,7 +18,7 @@ def is_checkpoint(obj):
     return False
 
 
-class CheckPoint(object):
+class CheckPoint:
     MODEL = 'model'
     OPTIMIZER = 'opt'
     GLOBALSTEP = 'global_step'
@@ -30,10 +28,7 @@ class CheckPoint(object):
     def __init__(self, launcher=None):
         self._launcher = launcher
         self._global_step = 0
-        self._json_log = {CheckPoint.LASTCHECKPOINT: dict(
-            step=0,
-            name=''),
-        }
+        self._json_log = {CheckPoint.LASTCHECKPOINT: dict(step=0, name='')}
         self.init_checkpoint_info_from_launcher()
 
     def set_global_step(self, value):
@@ -53,22 +48,27 @@ class CheckPoint(object):
         self._launcher = launcher
         self.init_checkpoint_info_from_launcher()
 
-    def save(self):
+    def save(self, filename=None):
         ckpt = OrderedDict({
-            CheckPoint.MODEL: self._launcher.model.state_dict(),
-            CheckPoint.OPTIMIZER: self._launcher.optimizer.state_dict(),
+            CheckPoint.MODEL: self._launcher.model_without_ddp.state_dict(),
             CheckPoint.GLOBALSTEP: self.global_step
         })
-        filename = self.get_checkpoint_name(self.global_step)
+        if isinstance(self._launcher.optimizer, dict):
+            ckpt[CheckPoint.OPTIMIZER] = {name: opt.state_dict() for name, opt in self._launcher.optimizer.items()}
+        else:
+            ckpt[CheckPoint.OPTIMIZER] = self._launcher.optimizer.state_dict()
+
+        if filename is None:
+            filename = self.get_checkpoint_name(self.global_step)
         filepath = os.path.join(self._launcher.model_dir, filename)
         torch.save(ckpt, filepath)
         self._json_log[self.global_step] = filename
         if self.global_step > self._json_log[CheckPoint.LASTCHECKPOINT]['step']:
             self._json_log[CheckPoint.LASTCHECKPOINT]['step'] = self.global_step
             self._json_log[CheckPoint.LASTCHECKPOINT]['name'] = filename
-        self.save_checkpoint_info(self._launcher.model_dir)
+        self.save_checkpoint_info(self._launcher.model_dir, self._launcher.logger)
         # log
-        save_log(logger, filename)
+        save_log(self._launcher.logger, filename)
 
     @staticmethod
     def load(filepath):
@@ -76,7 +76,7 @@ class CheckPoint(object):
 
         return ckpt
 
-    def save_checkpoint_info(self, model_dir):
+    def save_checkpoint_info(self, model_dir, logger):
         with open(os.path.join(model_dir, CheckPoint.CHECKPOINT_NAME), 'w') as f:
             json.dump(self._json_log, f)
         save_log(logger, CheckPoint.CHECKPOINT_NAME)
@@ -99,17 +99,22 @@ class CheckPoint(object):
         # 3. ckpt
         ckpt = self.load(last_path)
         # 4. resume
-        if hasattr(self._launcher.model, 'module'):
-            model_state_dict = ckpt[CheckPoint.MODEL]
-        else:
-            model_state_dict = remove_module_prefix(ckpt[CheckPoint.MODEL])
-        self._launcher.model.load_state_dict(model_state_dict)
+        # if hasattr(self._launcher.model, 'module'):
+        #     model_state_dict = ckpt[CheckPoint.MODEL]
+        # else:
+        #     model_state_dict = remove_module_prefix(ckpt[CheckPoint.MODEL])
+
+        self._launcher.model_without_ddp.load_state_dict(ckpt[CheckPoint.MODEL])
         if self._launcher.optimizer is not None:
-            self._launcher.optimizer.load_state_dict(ckpt[CheckPoint.OPTIMIZER])
+            if isinstance(self._launcher.optimizer, dict):
+                for name, opt in self._launcher.optimizer.items():
+                    opt.load_state_dict(ckpt[CheckPoint.OPTIMIZER][name])
+            else:
+                self._launcher.optimizer.load_state_dict(ckpt[CheckPoint.OPTIMIZER])
         if self._launcher.checkpoint is not None:
             self._launcher.checkpoint.set_global_step(ckpt[CheckPoint.GLOBALSTEP])
         # log
-        restore_log(logger, last_path)
+        restore_log(self._launcher.logger, last_path)
 
     def init_checkpoint_info_from_launcher(self):
         if self._launcher is None:
@@ -133,7 +138,7 @@ class CheckPoint(object):
 
     @staticmethod
     def get_checkpoint_name(global_step):
-        return 'model-{}.pth'.format(global_step)
+        return 'checkpoint-{}.pth'.format(global_step)
 
 
 def remove_module_prefix(model_state_dict):

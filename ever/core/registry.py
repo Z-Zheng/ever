@@ -72,15 +72,21 @@ def register_dir(dir_name):
     import importlib
     import os
     for root, dirs, files in os.walk(os.path.join(os.path.curdir, dir_name)):
+        if os.path.basename(root).startswith('_'):
+            continue
         x = root.split(os.path.sep)
         prefix = '.'.join(x[1:])
-        py_files = [f for f in files if f.endswith('.py')]
+        py_files = [f for f in files if f.endswith('.py') and not f.startswith('_')]
         for pyf in py_files:
             importlib.import_module('{}.{}'.format(prefix, pyf.replace('.py', '')))
 
 
 def register_file(file_path):
     return _import_file('ever.custom', file_path)
+
+
+def register_callbacks():
+    register_dir('callback')
 
 
 def register_modules():
@@ -94,6 +100,7 @@ def register_dataloaders():
 def register_all():
     register_dataloaders()
     register_modules()
+    register_callbacks()
 
 
 LR = Registry()
@@ -102,3 +109,5 @@ DATALOADER = Registry()
 MODEL = Registry()
 LOSS = Registry()
 OP = Registry()
+CALLBACK = Registry()
+DATASET = Registry()
