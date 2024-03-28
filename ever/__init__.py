@@ -24,4 +24,4 @@ __all__ = [
 ]
 
 __internal_version__ = '2.2.0'
-__version__ = "0.4.0"
+__version__ = "0.4.1"
