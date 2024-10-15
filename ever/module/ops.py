@@ -5,6 +5,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# From https://github.com/facebookresearch/detectron2/blob/main/detectron2/layers/batch_norm.py # noqa
+# Itself from https://github.com/facebookresearch/ConvNeXt/blob/d1fa8f6fef0a165b27399986cc2bdacc92777e40/models/convnext.py#L119  # noqa
+class LayerNorm2d(nn.Module):
+    def __init__(self, num_features: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(num_features))
+        self.bias = nn.Parameter(torch.zeros(num_features))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        u = x.mean(1, keepdim=True)
+        s = (x - u).pow(2).mean(1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.eps)
+        x = self.weight[:, None, None] * x + self.bias[:, None, None]
+        return x
+
+
 class DepthwiseConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1,
@@ -132,6 +149,23 @@ class ListIndex(nn.Module):
             return [features[i] for i in self.index]
 
 
+class Bf16compatible(nn.Module):
+    def __init__(self, module):
+        super().__init__()
+        self._inner_module = module
+
+    def forward(self, x):
+        dtype = x.dtype
+        if dtype == torch.bfloat16:
+            x = x.to(torch.float32)
+
+        x = self._inner_module(x)
+        if dtype == torch.bfloat16:
+            x = x.to(dtype)
+
+        return x
+
+
 class ConvUpsampling(nn.Sequential):
     def __init__(self,
                  in_channels,
@@ -143,7 +177,7 @@ class ConvUpsampling(nn.Sequential):
                  dilation=1):
         super(ConvUpsampling, self).__init__(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation),
-            nn.UpsamplingBilinear2d(scale_factor=scale_factor)
+            Bf16compatible(nn.UpsamplingBilinear2d(scale_factor=scale_factor)),
         )
 
 
