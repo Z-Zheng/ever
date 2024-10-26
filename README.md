@@ -15,7 +15,7 @@ EVer is a Pytorch-based Python library to simplify the training and inference of
 
 ## Installation
 
-### stable version (0.4.1)
+### stable version (0.5.0)
 ```bash
 pip install ever-beta
 ```
@@ -32,7 +32,8 @@ pip install --upgrade git+https://github.com/Z-Zheng/ever.git
 ## Projects using EVer
 
 ### Change Detection (Our Change Family)
-- (AnyChange) Segment Any Change, arxiv 2024 [[`Paper`](https://arxiv.org/abs/2402.01188)]
+- torchange: A Unified Change Representation Learning Benchmark Library [[`Code`](https://github.com/Z-Zheng/pytorch-change-models)]
+- (AnyChange) Segment Any Change, NeurIPS 2024 [[`Paper`](https://arxiv.org/abs/2402.01188)]
 - (Changen) Scalable Multi-Temporal Remote Sensing Change Data Generation via Simulating Stochastic Change Process, ICCV 2023 [[`Paper`](https://arxiv.org/pdf/2309.17031)], [[`Code`](https://github.com/Z-Zheng/Changen)]
 - (ChangeMask) ChangeMask: Deep Multi-task Encoder-Transformer-Decoder Architecture for Semantic Change Detection, ISPRS P&RS 2022. [[`Paper`](https://www.sciencedirect.com/science/article/pii/S0924271621002835)]
 - (ChangeStar) Change is Everywhere: Single-Temporal Supervised Object Change Detection
