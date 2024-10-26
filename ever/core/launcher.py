@@ -1,11 +1,16 @@
 import os
 import time
 import types
-import contextlib
+from packaging import version
 
 import torch
 
-from torch.cuda.amp import GradScaler, autocast
+if version.parse(torch.__version__) >= version.parse("2.4"):
+    from torch.amp import GradScaler
+else:
+    from torch.cuda.amp import GradScaler
+
+from torch.amp import autocast
 from torch.nn.parallel import DistributedDataParallel
 from ever.interface.callback import Callback
 from ever.interface.callback import SaveCheckpointCallback
@@ -29,9 +34,20 @@ class Launcher(object):
                  model,
                  optimizer,
                  lr_schedule,
-                 amp,
+                 mixed_precision,
                  ):
-        self._amp = amp
+        if mixed_precision == 'fp32':
+            self._mixed_precision = torch.float32
+            self._amp = False
+        elif mixed_precision == 'fp16':
+            self._mixed_precision = torch.float16
+            self._amp = True
+        elif mixed_precision == 'bf16':
+            self._mixed_precision = torch.bfloat16
+            self._amp = True
+        else:
+            raise ValueError('unrecognized datatype, it should be one of [fp32, fp16, bf16].')
+
         self._model_dir = model_dir
         self._model = model
         self._optimizer = optimizer
@@ -54,15 +70,13 @@ class Launcher(object):
 
         self._callbacks = []
 
-        if amp:
+        if self._amp:
             if isinstance(optimizer, dict):
                 self.scaler = {name: GradScaler() for name, _ in optimizer.items()}
             else:
                 self.scaler = GradScaler()
-            self.amp_cm = autocast
         else:
             self.scaler = None
-            self.amp_cm = contextlib.nullcontext
 
     @property
     def is_main_process(self):
@@ -88,15 +102,23 @@ class Launcher(object):
         return self._model
 
     @property
-    def er_model(self):
+    def unwrapped_model(self):
+        model = self._model
+        if isinstance(self._model, DistributedDataParallel):
+            model = model.module
+        if version.parse(torch.__version__) < version.parse("2.0") or not hasattr(torch, "_dynamo"):
+            return model
+        if isinstance(model, torch._dynamo.eval_frame.OptimizedModule):
+            model = model._orig_mod
+
+        return model
+
+    @property
+    def model_without_ddp(self):
         if isinstance(self._model, DistributedDataParallel):
             return self._model.module
         else:
             return self._model
-
-    @property
-    def model_without_ddp(self):
-        return self.er_model
 
     @property
     def optimizer(self):
@@ -163,11 +185,11 @@ class Launcher(object):
         )
 
     def compute_loss_gradient(self, data, forward_times):
-        with self.amp_cm():
+        with autocast(device_type='cuda', enabled=self._amp, dtype=self._mixed_precision):
             msg_dict = self._model(*data)
             losses = {k: v / forward_times for k, v in msg_dict.items() if k.endswith('loss')}
 
-        self.er_model.backward(loss_dict=losses, amp=self._amp, scaler=self.scaler)
+        self.unwrapped_model.backward(loss_dict=losses, amp=self._amp, scaler=self.scaler)
 
         return msg_dict
 
@@ -288,14 +310,14 @@ class Launcher(object):
                     for sub_data in data:
                         msg_dict = self.compute_loss_gradient(sub_data, len(data))
 
-                self.er_model.apply_gradients(self.optimizer, self._amp, scaler=self.scaler)
+                self.unwrapped_model.apply_gradients(self.optimizer, self._amp, scaler=self.scaler)
 
             msg_dict = self.log_info_dict(msg_dict)
             signal_loss_dict = msg_dict.copy()
 
             if self._master:
                 if summary_grads and self._ckpt.global_step % tensorboard_interval_step == 0:
-                    self._logger.summary_grads(module=self.er_model,
+                    self._logger.summary_grads(module=self.unwrapped_model,
                                                step=self._ckpt.global_step)
 
             with torch.autograd.profiler.record_function('update_lr_params'):
@@ -321,7 +343,7 @@ class Launcher(object):
                     self._logger.info(self.model_dir)
 
                 if summary_weights and self._ckpt.global_step % tensorboard_interval_step == 0:
-                    self._logger.summary_weights(module=self.er_model,
+                    self._logger.summary_weights(module=self.unwrapped_model,
                                                  step=self._ckpt.global_step)
 
         del iterator
@@ -342,6 +364,7 @@ class Launcher(object):
             num_samples = len(train_data_loader.dataset)
 
         if self._master:
+            self._logger.info(f'mixed precision type: {self._mixed_precision}')
             self._logger.equation('num_samples', num_samples)
             self._logger.equation('batch_size_per_gpu', train_data_loader.batch_sampler.batch_size)
             self._logger.forward_times(config['forward_times'])
@@ -350,8 +373,8 @@ class Launcher(object):
             self._logger.equation('num_iters', config['num_iters'])
             self._logger.equation('optimizer', self.optimizer)
 
-            model_extra_info = self.er_model.log_info()
-            model_extra_info['model.type'] = self.er_model.__class__.__name__
+            model_extra_info = self.unwrapped_model.log_info()
+            model_extra_info['model.type'] = self.unwrapped_model.__class__.__name__
 
             for k, v in model_extra_info.items():
                 self._logger.equation(k, v)

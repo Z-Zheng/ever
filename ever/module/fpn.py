@@ -4,7 +4,7 @@ from typing import List
 import torch
 import torch.nn.functional as F
 from torch import nn
-from .ops import SeparableConv2d, ConvBlock
+from .ops import SeparableConv2d, ConvBlock, Bf16compatible
 
 __all__ = ['FPN',
            'LastLevelMaxPool',
@@ -92,7 +92,15 @@ class FPN(nn.Module):
         ):
             if not inner_block:
                 continue
+
+            # make it compatible with bf16
+            dtype = last_inner.dtype
+            if dtype == torch.bfloat16:
+                last_inner = last_inner.to(torch.float32)
             inner_top_down = F.interpolate(last_inner, scale_factor=2, mode="nearest")
+            if dtype == torch.bfloat16:
+                inner_top_down = inner_top_down.to(dtype)  # cast back to bf16
+
             inner_lateral = getattr(self, inner_block)(feature)
             last_inner = inner_lateral + inner_top_down
             results.insert(0, getattr(self, layer_block)(last_inner))
@@ -156,8 +164,8 @@ class AssymetricDecoder(nn.Module):
                 nn.Sequential(
                     nn.Conv2d(in_channels if idx == 0 else out_channels, out_channels, 3, 1, 1, bias=False),
                     norm_fn(**norm_fn_args) if norm_fn is not None else nn.Identity(),
-                    nn.ReLU(inplace=True),
-                    nn.UpsamplingBilinear2d(scale_factor=2) if num_upsample != 0 else nn.Identity(),
+                    nn.ReLU(True) if norm_fn == nn.BatchNorm2d else nn.GELU(),
+                    Bf16compatible(nn.UpsamplingBilinear2d(scale_factor=2)) if num_upsample != 0 else nn.Identity(),
                 )
                 for idx in range(num_layers)]))
 
@@ -169,7 +177,7 @@ class AssymetricDecoder(nn.Module):
             self.dropout = nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
             self.classifier = nn.Sequential(
                 nn.Conv2d(out_channels, num_classes, kernel_size, padding=(kernel_size - 1) // 2),
-                nn.UpsamplingBilinear2d(scale_factor=scale_factor) if scale_factor > 1 else nn.Identity()
+                Bf16compatible(nn.UpsamplingBilinear2d(scale_factor=scale_factor)) if scale_factor > 1 else nn.Identity()
             )
 
     def forward(self, feat_list: list):

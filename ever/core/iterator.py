@@ -3,6 +3,7 @@ import warnings
 from torch.utils.data.distributed import DistributedSampler
 
 from ever.interface.callback import Callback
+from ever.core.dist import synchronize
 
 __all__ = [
     'get_iterator',
@@ -32,11 +33,13 @@ def run_callbacks(call_backs, current_epoch, is_master):
         if f.only_master:
             if is_master:
                 f.func()
+            synchronize()
         else:
             f.func()
+            synchronize()
 
 
-class Iterator(object):
+class Iterator:
     def __init__(self, data_loader):
         self._data_loader = data_loader
         self._iterator = iter(self._data_loader)

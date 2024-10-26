@@ -24,8 +24,8 @@ def get_default_parser():
                         help='type of trainer')
     parser.add_argument('--find_unused_parameters', action='store_true',
                         help='whether to find unused parameters')
-    parser.add_argument('--amp', action='store_true',
-                        help='whether to use automatic mixed precision (amp) training')
+    parser.add_argument('--mixed_precision', default='fp32', type=str,
+                        help='datatype', choices=['fp32', 'fp16', 'bf16'])
     parser.add_argument('--use_wandb', action='store_true',
                         help='whether to use wandb for logging')
     parser.add_argument('--project', default=None, type=str,

@@ -26,7 +26,7 @@ class ERModule(nn.Module, ConfigurableMixin):
         raise NotImplementedError
 
     def set_default_config(self):
-        raise NotImplementedError('A default config should be overridden.')
+        raise NotImplementedError('The default config should be overridden.')
 
     def init_from_weight_file(self):
         if 'weight' not in self.config.GLOBAL:
@@ -77,19 +77,26 @@ class ERModule(nn.Module, ConfigurableMixin):
     def apply_gradients(self, optimizer, amp, **kwargs):
         if amp:
             kwargs['scaler'].unscale_(optimizer)
-            self.clip_grad(optimizer)
+            grad_info = self.clip_grad(optimizer)
             kwargs['scaler'].step(optimizer)
             kwargs['scaler'].update()
         else:
-            self.clip_grad(optimizer)
+            grad_info = self.clip_grad(optimizer)
             optimizer.step()
 
         optimizer.zero_grad()
+        return grad_info
 
     def clip_grad(self, optimizer):
+        grad_info = dict()
         if 'grad_clip' in optimizer.er_config:
-            grad_clip_config = optimizer.er_config.get('grad_clip',
-                                                       dict(max_norm=35, norm_type=2))
-            clip_grad.clip_grad_norm_(
+            grad_clip_config = optimizer.er_config.get(
+                'grad_clip',
+                dict(max_norm=35, norm_type=2)
+            )
+            total_norm = clip_grad.clip_grad_norm_(
                 filter(lambda p: p.requires_grad, self.parameters()),
-                **grad_clip_config)
+                **grad_clip_config
+            )
+            grad_info['grad_norm'] = total_norm
+        return grad_info

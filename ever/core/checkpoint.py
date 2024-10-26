@@ -50,7 +50,7 @@ class CheckPoint:
 
     def save(self, filename=None):
         ckpt = OrderedDict({
-            CheckPoint.MODEL: self._launcher.model_without_ddp.state_dict(),
+            CheckPoint.MODEL: self._launcher.unwrapped_model.state_dict(),
             CheckPoint.GLOBALSTEP: self.global_step
         })
         if isinstance(self._launcher.optimizer, dict):
@@ -104,7 +104,7 @@ class CheckPoint:
         # else:
         #     model_state_dict = remove_module_prefix(ckpt[CheckPoint.MODEL])
 
-        self._launcher.model_without_ddp.load_state_dict(ckpt[CheckPoint.MODEL])
+        self._launcher.unwrapped_model.load_state_dict(ckpt[CheckPoint.MODEL])
         if self._launcher.optimizer is not None:
             if isinstance(self._launcher.optimizer, dict):
                 for name, opt in self._launcher.optimizer.items():

@@ -1,6 +1,7 @@
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+from torch.amp import autocast
 
 from ever.trainer import trainer
 from ever.core.launcher import Launcher
@@ -20,6 +21,7 @@ class THDDPTrainer(trainer.Trainer):
         model = super(THDDPTrainer, self).make_model()
         if self.config.train.get('sync_bn', False):
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = self.torch_compile(model)
         model = model.to(self.device)
         model = nn.parallel.DistributedDataParallel(
             model,
@@ -30,7 +32,7 @@ class THDDPTrainer(trainer.Trainer):
         return model
 
     def build_launcher(self):
-        kwargs = dict(model_dir=self.args.model_dir, amp=self.args.amp)
+        kwargs = dict(model_dir=self.args.model_dir, mixed_precision=self.args.mixed_precision)
         kwargs.update(dict(model=self.make_model()))
         kwargs.update(
             self.make_lr_optimizer(kwargs['model'].module.custom_param_groups()))
@@ -40,8 +42,8 @@ class THDDPTrainer(trainer.Trainer):
 
 
 class GANLauncher(Launcher):
-    def compute_loss_gradient(self, data):
-        with self.amp_cm():
+    def compute_loss_gradient(self, data, forward_times=1):
+        with autocast('cuda', enabled=self._amp, dtype=self._mixed_precision):
             msg_dict = self.model.forward_backward(data, optimizer=self.optimizer, scaler=self.scaler)
         return msg_dict
 
@@ -60,6 +62,7 @@ class THDDPGANTrainer(trainer.Trainer):
         model = super().make_model()
         if self.config.train.get('sync_bn', False):
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = self.torch_compile(model)
         model = model.to(self.device)
 
         model.G = nn.parallel.DistributedDataParallel(
@@ -79,7 +82,7 @@ class THDDPGANTrainer(trainer.Trainer):
         return model
 
     def build_launcher(self):
-        kwargs = dict(model_dir=self.args.model_dir, amp=self.args.amp)
+        kwargs = dict(model_dir=self.args.model_dir, mixed_precision=self.args.mixed_precision)
         kwargs.update(dict(model=self.make_model()))
         kwargs.update(
             self.make_lr_optimizer(kwargs['model'].custom_param_groups()))

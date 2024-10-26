@@ -161,8 +161,6 @@ class Trainer(object):
             name = self.args.model_dir
             tl.logger.init_wandb(project=self.args.project, name=name, wandb_dir=self.args.model_dir)
 
-        self.support_torch_compile(tl)
-
         kw_dataloader = self.make_dataloader()
 
         param_util.trainable_parameters(tl.model, tl.logger)
@@ -204,8 +202,6 @@ class Trainer(object):
             name = self.args.model_dir
             tl.logger.init_wandb(project=self.args.project, name=name, wandb_dir=self.args.model_dir)
 
-        self.support_torch_compile(tl)
-
         param_util.trainable_parameters(tl.model, tl.logger)
         param_util.count_model_parameters(tl.model, tl.logger)
 
@@ -230,9 +226,7 @@ class Trainer(object):
     def reset_callbacks(self):
         self._callbacks.clear()
 
-    def support_torch_compile(self, launcher):
-        if getattr(self.config.train, 'torch_compile', False):
-            # ref: https://github.com/open-mmlab/mmengine/blob/ff27b723dbc2f6c2846489b8b134c353f39a4ec6/mmengine/runner/runner.py#L2315
-            compiled_func = torch.compile(launcher.compute_loss_gradient)
-            setattr(launcher, 'compute_loss_gradient', compiled_func)
-            launcher.logger.info('using torch.compile')
+    def torch_compile(self, model):
+        if 'torch_compile' in self.config.train:
+            model = torch.compile(model, **self.config.train.torch_compile)
+        return model

@@ -1,11 +1,12 @@
 class Callback:
-    def __init__(self,
-                 epoch_interval: int,
-                 only_master: bool,
-                 prior: int = 100,
-                 before_train=False,
-                 after_train=False,
-                 ):
+    def __init__(
+            self,
+            epoch_interval: int,
+            only_master: bool,
+            prior: int = 100,
+            before_train=False,
+            after_train=False,
+    ):
         self._epoch_interval = epoch_interval
         self._only_master = only_master
         self._launcher = None
@@ -72,9 +73,11 @@ class Callback:
 
 class SaveCheckpointCallback(Callback):
     def __init__(self, epoch_interval: int):
-        super().__init__(epoch_interval=epoch_interval, only_master=True, prior=0,
-                         before_train=False,
-                         after_train=True)
+        super().__init__(
+            epoch_interval=epoch_interval, only_master=True, prior=0,
+            before_train=False,
+            after_train=True
+        )
 
     def func(self):
         self.launcher.checkpoint.save()
@@ -84,12 +87,14 @@ class SaveCheckpointCallback(Callback):
 
 
 class EvaluationCallback(Callback):
-    def __init__(self,
-                 dataloader,
-                 epoch_interval: int,
-                 only_master: bool,
-                 after_train=True,
-                 config=None):
+    def __init__(
+            self,
+            dataloader,
+            epoch_interval: int,
+            only_master: bool,
+            after_train=True,
+            config=None
+    ):
         super().__init__(epoch_interval=epoch_interval, only_master=only_master,
                          before_train=False,
                          after_train=after_train)
