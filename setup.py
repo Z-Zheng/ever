@@ -27,6 +27,7 @@ setup(
     name='ever_beta',
     version=get_version(),
     description='A Library for Earth Vision Researcher',
+    long_description_content_type='text/plain',
     keywords='Remote Sensing, '
              'Earth Vision, '
              'Deep Learning, '
@@ -52,4 +53,5 @@ setup(
     setup_requires=[],
     tests_require=[],
     install_requires=install_requires,
-    zip_safe=False)
+    zip_safe=False
+)
