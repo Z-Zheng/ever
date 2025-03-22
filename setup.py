@@ -1,14 +1,4 @@
 from setuptools import find_packages, setup
-from os import path
-
-
-def get_version():
-    init_py_path = path.join(path.abspath(path.dirname(__file__)), "ever", "__init__.py")
-    init_py = open(init_py_path, "r").readlines()
-    version_line = [l.strip() for l in init_py if l.startswith("__version__")][0]
-    version = version_line.split("=")[-1].strip().strip("'\"")
-    return version
-
 
 install_requires = [
     'numpy',
@@ -27,7 +17,7 @@ install_requires = [
 ]
 setup(
     name='ever_beta',
-    version=get_version(),
+    version='0.5.1',
     description='A Library for Earth Vision Researcher',
     long_description_content_type='text/plain',
     keywords='Remote Sensing, '
