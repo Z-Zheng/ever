@@ -2,11 +2,9 @@ import torch
 
 from ever.core import config, checkpoint
 from ever.core.builder import make_model
-from ever.core.logger import get_logger
+from ever.core.logger import info
 import os
 from pathlib import Path
-
-logger = get_logger(__name__)
 
 __all__ = [
     'build_from_file',
@@ -23,12 +21,18 @@ def build_from_file(config_path):
 
 def build_and_load_from_file(config_path, checkpoint_path):
     model = build_from_file(config_path)
-    model_state_dict = checkpoint.load_model_state_dict_from_ckpt(checkpoint_path)
-    global_step = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)[
-        checkpoint.CheckPoint.GLOBALSTEP]
+
+    try:
+        model_state_dict = checkpoint.load_model_state_dict_from_ckpt(checkpoint_path)
+        global_step = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)[
+            checkpoint.CheckPoint.GLOBALSTEP]
+    except KeyError:
+        model_state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+        global_step = int(Path(checkpoint_path).name.split('.')[0].split('-')[1])
+
     model.eval()
     model.load_state_dict(model_state_dict)
-    logger.info('[Load params] from {}'.format(checkpoint_path))
+    info('[Load params] from {}'.format(checkpoint_path))
     return model, global_step
 
 
@@ -44,7 +48,12 @@ def build_from_model_dir(model_dir, checkpoint_name=None):
 
     if checkpoint_name is None:  # try the best and then the last
         if os.path.exists(os.path.join(model_dir, 'model-best.pth')):
-            checkpoint_name = 'model-best.pth'
+            model = build_from_file(cfg_path)
+            model.eval()
+            weights = torch.load(os.path.join(model_dir, 'model-best.pth'), map_location=lambda storage, loc: storage)
+            model.load_state_dict(weights)
+            info('[Load params] from {}'.format(os.path.join(model_dir, 'model-best.pth')))
+            return model, 'best'
         else:
             fps = [str(fp) for fp in Path(model_dir).glob('checkpoint-*.pth')]
 
@@ -61,4 +70,4 @@ def export_model(config_path, checkpoint_path, input_shape, output_path):
     model, gs = build_and_load_from_file(config_path, checkpoint_path)
     traced = torch.jit.trace(model, torch.ones(input_shape))
     torch.jit.save(traced, output_path)
-    logger.info('[export model] to {}'.format(output_path))
+    info('[export model] to {}'.format(output_path))

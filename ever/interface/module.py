@@ -51,6 +51,9 @@ class ERModule(nn.Module, ConfigurableMixin):
         for k, v in state_dict.items():
             if k.startswith('module.'):
                 k = k.replace('module.', '')
+            if '_orig_mod.' in k:
+                k = k.replace('_orig_mod.', '')
+
             if getattr(pattern, 'match', lambda _: False)(k):
                 # ignore
                 continue

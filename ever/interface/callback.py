@@ -49,6 +49,10 @@ class Callback:
         return self._launcher.model_without_ddp
 
     @property
+    def unwrapped_model(self):
+        return self._launcher.unwrapped_model
+
+    @property
     def model_dir(self):
         return self._launcher.model_dir
 

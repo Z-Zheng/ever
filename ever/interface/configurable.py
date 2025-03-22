@@ -1,7 +1,8 @@
 from ever.core.config import AttrDict
+from huggingface_hub import PyTorchModelHubMixin
 
 
-class ConfigurableMixin(object):
+class ConfigurableMixin(PyTorchModelHubMixin):
     """
     Usage 1: for torch.nn.Module
     >>> import torch.nn as nn

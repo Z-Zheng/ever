@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 import torch.distributed as dist
 from ever.core.dist import get_world_size
+from typing import Union
+from einops import rearrange
 
 
 def _masked_ignore(y_pred: torch.Tensor, y_true: torch.Tensor, ignore_index: int):
@@ -71,20 +73,53 @@ def dice_loss_with_logits(y_pred: torch.Tensor, y_true: torch.Tensor,
 
 def tversky_loss_with_logits(
         y_pred: torch.Tensor, y_true: torch.Tensor,
-        alpha: float, beta: float, gamma: float,
+        alpha: Union[float, list, tuple], beta: float = None, gamma: float = 1.0,
         smooth_value: float = 1.0,
         ignore_index: int = 255,
+        reduction='mean',
         *,
         sync_statistics=True,
 ):
-    y_pred, y_true = _masked_ignore(y_pred, y_true, ignore_index)
+    y_pred = rearrange(y_pred, 'b c h w -> (b h w) c')
+    y_true = rearrange(y_true, 'b h w -> (b h w)')
+    valid = y_true != ignore_index
+    y_pred = y_pred[valid, :]
+    y_true = y_true[valid]
 
-    y_pred = y_pred.sigmoid()
-    tp = (y_pred * y_true).sum()
-    # fp = (y_pred * (1 - y_true)).sum()
-    fp = y_pred.sum() - tp
-    # fn = ((1 - y_pred) * y_true).sum()
-    fn = y_true.sum() - tp
+    if isinstance(alpha, (list, tuple)):
+        alpha = torch.as_tensor(alpha, dtype=y_pred.dtype, device=y_pred.device)
+
+    if beta is None:
+        beta = 1. - alpha
+
+    return _1d_tversky_loss_with_logits(
+        y_pred, y_true,
+        alpha=alpha, beta=beta, gamma=gamma,
+        smooth_value=smooth_value,
+        reduction=reduction,
+        sync_statistics=sync_statistics
+    )
+
+
+def _1d_tversky_loss_with_logits(
+        y_pred: torch.Tensor, y_true: torch.Tensor,
+        alpha: float, beta: float, gamma: float,
+        smooth_value: float = 1.0,
+        reduction='mean',
+        *,
+        sync_statistics=True,
+):
+    c = y_pred.size(1)
+    if c > 1:
+        y_pred = y_pred.log_softmax(dim=1).exp()
+        y_true = F.one_hot(y_true.long(), num_classes=y_pred.size(1))
+    else:
+        y_pred = F.logsigmoid(y_pred).exp()
+        y_true = y_true.unsqueeze(dim=1)
+
+    tp = (y_pred * y_true).sum(dim=0)
+    fp = y_pred.sum(dim=0) - tp
+    fn = y_true.sum(dim=0) - tp
 
     numerator = tp
     denominator = tp + alpha * fn + beta * fp
@@ -95,9 +130,15 @@ def tversky_loss_with_logits(
 
     numerator += smooth_value
     denominator += smooth_value
-
     tversky_coeff = numerator / denominator
-    return (1. - tversky_coeff) ** gamma
+
+    loss = (1. - tversky_coeff) ** gamma
+    if reduction == 'mean':
+        return loss.mean()
+    elif reduction == 'none':
+        return loss
+    else:
+        raise ValueError(f'unknown reduction: {reduction}')
 
 
 @torch.jit.script

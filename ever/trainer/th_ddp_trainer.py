@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from torch.amp import autocast
+from torch.cuda.amp import autocast
 
 from ever.trainer import trainer
 from ever.core.launcher import Launcher
@@ -43,7 +43,7 @@ class THDDPTrainer(trainer.Trainer):
 
 class GANLauncher(Launcher):
     def compute_loss_gradient(self, data, forward_times=1):
-        with autocast('cuda', enabled=self._amp, dtype=self._mixed_precision):
+        with autocast(enabled=self._amp, dtype=self._mixed_precision):
             msg_dict = self.model.forward_backward(data, optimizer=self.optimizer, scaler=self.scaler)
         return msg_dict
 

@@ -138,7 +138,7 @@ class Launcher(object):
 
     def save_model(self, filename=None):
         if self._master:
-            weights = self.model_without_ddp.state_dict()
+            weights = self.unwrapped_model.state_dict()
             if filename is None:
                 filename = self._ckpt.get_checkpoint_name(self.global_step)
             torch.save(weights, os.path.join(self.model_dir, filename))

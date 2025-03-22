@@ -14,14 +14,16 @@ install_requires = [
     'numpy',
     'prettytable',
     'Pillow',
-    'albumentations>=0.4.2',
+    'albumentations',
     'tensorboard>=1.14',
     'tifffile',
     'scikit-image',
-    'scipy',
     'matplotlib',
     'tqdm',
-    'pandas'
+    'pandas',
+    'wandb',
+    'einops',
+    'huggingface_hub',
 ]
 setup(
     name='ever_beta',
