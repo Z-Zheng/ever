@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ever_beta"
+version = "0.5.1"
+description = "A Library for Earth Vision Researcher"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+  { name = "Zhuo Zheng", email = "zhuozheng@cs.stanford.edu" }
+]
+
+keywords = [
+    "Remote Sensing",
+    "Earth Vision",
+    "Deep Learning",
+    "Object Detection",
+    "Semantic Segmentation",
+    "Image Classification",
+    "Change Detection"
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Remote Sensing",
+]
+
+dependencies = [
+    "numpy",
+    "prettytable",
+    "Pillow",
+    "albumentations",
+    "tensorboard>=1.14",
+    "tifffile",
+    "scikit-image",
+    "matplotlib",
+    "tqdm",
+    "pandas",
+    "wandb",
+    "einops",
+    "huggingface_hub"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "ever.__version__"}
+
+
+[tool.setuptools.packages.find]
+exclude = ["projects", "tools"]
