@@ -137,8 +137,10 @@ class Trainer(object):
         return dict(config=self.config, launcher=tl)
 
     def build_launcher(self):
-        kwargs = dict(model_dir=self.args.model_dir)
-        kwargs.update(dict(model=self.make_model().to(self.device)))
+        kwargs = dict(
+            model_dir=self.args.model_dir,
+            model=self.make_model().to(self.device)
+        )
         kwargs.update(self.make_lr_optimizer(kwargs['model'].custom_param_groups()))
         tl = Launcher(**kwargs)
 
@@ -183,9 +185,11 @@ class Trainer(object):
 
         tl.info(f'config: {self.config}')
         # start training
-        tl.train_by_config(kw_dataloader['traindata_loader'],
-                           config=merge_dict(self.config.train, self.config.test),
-                           test_data_loader=kw_dataloader['testdata_loader'])
+        tl.train_by_config(
+            kw_dataloader['traindata_loader'],
+            config=merge_dict(self.config.train, self.config.test),
+            test_data_loader=kw_dataloader['testdata_loader']
+        )
 
         return dict(config=self.config, launcher=tl)
 
@@ -212,11 +216,14 @@ class Trainer(object):
         tl.logger.info('th sync bn: {}'.format('on' if self.config.train.get('sync_bn', False) else 'off'))
         tl.logger.info('external parameter: {}'.format(self.args.opts))
 
-        tl.train_by_config(train_dataloader,
-                           config=merge_dict(self.config.train,
-                                             self.config.test),
-                           test_data_loader=test_dataloader
-                           )
+        tl.train_by_config(
+            train_dataloader,
+            config=merge_dict(
+                self.config.train,
+                self.config.test
+            ),
+            test_data_loader=test_dataloader
+        )
 
         return dict(config=self.config, launcher=tl)
 

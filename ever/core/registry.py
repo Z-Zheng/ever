@@ -2,6 +2,7 @@
 import logging
 import importlib
 import sys
+from ever.core.logger import info
 
 logging.basicConfig(level=logging.INFO)
 

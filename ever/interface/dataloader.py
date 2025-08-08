@@ -1,3 +1,5 @@
+from ever.core.dist import get_world_size
+from ever.core.logger import info
 from ever.interface.configurable import ConfigurableMixin
 from ever.data.distributed import StepDistributedSampler, DistributedInfiniteSampler
 
@@ -40,6 +42,7 @@ class ERDataset(Dataset, ConfigurableMixin):
     def __init__(self, config):
         ConfigurableMixin.__init__(self, config)
         self.config.update(dict(
+            total_batch_size=-1,
             batch_size=1,
             num_workers=0,
             prefetch_factor=2,
@@ -54,6 +57,15 @@ class ERDataset(Dataset, ConfigurableMixin):
 
     def to_dataloader(self):
         sampler = self.SUPPORT_SAMPLERS[self.config.sampler_type](self)
+
+        if self.config.total_batch_size > 0:
+            num_processors = get_world_size()
+            assert self.config.total_batch_size % num_processors == 0, \
+                f'total_batch_size ({self.config.total_batch_size}) must be divisible by num_processors ({num_processors}).'
+
+            self.config.batch_size = self.config.total_batch_size // num_processors
+            info(f'using [`total_batch_size` = {self.config.total_batch_size}, `num_processors` = {num_processors}] instead of `batch_size`')
+
         return DataLoader(
             dataset=self,
             sampler=sampler,

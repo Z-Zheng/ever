@@ -145,11 +145,15 @@ def remove_module_prefix(model_state_dict):
     ret = {}
     safe_flag = False
     for k, v in model_state_dict.items():
-        if 'module.' not in k:
+        if ('module.' not in k) and ('_orig_mod.' not in k):
             safe_flag = True
             break
         if k.find('module.') == 0:
             k = k.replace('module.', '', 1)
+
+        if k.find('_orig_mod.') == 0:
+            k = k.replace('_orig_mod.', '', 1)
+
         ret[k] = v
     if safe_flag:
         return model_state_dict

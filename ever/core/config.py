@@ -46,7 +46,7 @@ def from_pickle(filepath):
 
 class AttrDict(OrderedDict):
     def __init__(self, **kwargs):
-        super(AttrDict, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.update(kwargs)
 
     @staticmethod
@@ -56,12 +56,12 @@ class AttrDict(OrderedDict):
         return ad
 
     def __setitem__(self, key: str, value):
-        super(AttrDict, self).__setitem__(key, value)
-        super(AttrDict, self).__setattr__(key, value)
+        super().__setitem__(key, value)
+        super().__setattr__(key, value)
 
     def __setattr__(self, key, value):
-        super(AttrDict, self).__setitem__(key, value)
-        super(AttrDict, self).__setattr__(key, value)
+        super().__setitem__(key, value)
+        super().__setattr__(key, value)
 
     def update(self, config: dict):
         for k, v in config.items():
@@ -82,15 +82,16 @@ class AttrDict(OrderedDict):
         assert len(str_list) % 2 == 0
         for key, value in zip(str_list[0::2], str_list[1::2]):
             key_list = key.split('.')
-            item = None
+            item = self
             last_key = key_list.pop()
             for sub_key in key_list:
-                if item is None:
-                    item = self[sub_key]
-                else:
-                    if isinstance(item, list) and sub_key.isdigit():
-                        sub_key = int(sub_key)
-                    item = item[sub_key]
+                if isinstance(item, list) and sub_key.isdigit():
+                    sub_key = int(sub_key)
+                elif isinstance(item, dict):
+                    if sub_key not in item:
+                        item[sub_key] = AttrDict()
+
+                item = item[sub_key]
             try:
                 item[last_key] = literal_eval(value)
             except:

@@ -38,8 +38,11 @@ class ERModule(nn.Module, ConfigurableMixin):
         if self.config.GLOBAL.weight.path is None:
             return
 
-        state_dict = torch.load(self.config.GLOBAL.weight.path,
-                                map_location=lambda storage, loc: storage)
+        state_dict = torch.load(
+            self.config.GLOBAL.weight.path,
+            map_location=lambda storage, loc: storage,
+            weights_only=False
+        )
         if checkpoint.is_checkpoint(state_dict):
             state_dict = state_dict[checkpoint.CheckPoint.MODEL]
         ret = {}
@@ -70,19 +73,19 @@ class ERModule(nn.Module, ConfigurableMixin):
     def custom_param_groups(self):
         return [{'params': self.parameters()}, ]
 
-    def backward(self, loss_dict, amp, **kwargs):
+    def backward(self, loss_dict, amp, scaler, **kwargs):
         total_loss = sum([e for e in loss_dict.values()])
-        if amp:
-            kwargs['scaler'].scale(total_loss).backward()
+        if amp and scaler is not None:
+            scaler.scale(total_loss).backward()
         else:
             total_loss.backward()
 
-    def apply_gradients(self, optimizer, amp, **kwargs):
-        if amp:
-            kwargs['scaler'].unscale_(optimizer)
+    def apply_gradients(self, optimizer, amp, scaler, **kwargs):
+        if amp and scaler is not None:
+            scaler.unscale_(optimizer)
             grad_info = self.clip_grad(optimizer)
-            kwargs['scaler'].step(optimizer)
-            kwargs['scaler'].update()
+            scaler.step(optimizer)
+            scaler.update()
         else:
             grad_info = self.clip_grad(optimizer)
             optimizer.step()

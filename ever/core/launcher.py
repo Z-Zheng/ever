@@ -70,7 +70,7 @@ class Launcher(object):
 
         self._callbacks = []
 
-        if self._amp:
+        if self._amp and mixed_precision == 'fp16':
             if isinstance(optimizer, dict):
                 self.scaler = {name: GradScaler() for name, _ in optimizer.items()}
             else:
@@ -142,7 +142,7 @@ class Launcher(object):
             if filename is None:
                 filename = self._ckpt.get_checkpoint_name(self.global_step)
             torch.save(weights, os.path.join(self.model_dir, filename))
-        self.info(f'{filename} has been saved.')
+            self.info(f'{filename} has been saved.')
 
     @property
     def lr(self):
@@ -295,9 +295,11 @@ class Launcher(object):
                 iterator.set_seed_for_dist_sampler(self._ckpt.global_step)
 
             with torch.autograd.profiler.record_function('load_data'):
-                data_list = iterator.next(forward_times,
-                                          call_backs=self._callbacks,
-                                          is_master=self._master)
+                data_list = iterator.next(
+                    forward_times,
+                    call_backs=self._callbacks,
+                    is_master=self._master
+                )
             data_time = time.time() - start
             self._model.train()
 
@@ -317,8 +319,10 @@ class Launcher(object):
 
             if self._master:
                 if summary_grads and self._ckpt.global_step % tensorboard_interval_step == 0:
-                    self._logger.summary_grads(module=self.unwrapped_model,
-                                               step=self._ckpt.global_step)
+                    self._logger.summary_grads(
+                        module=self.unwrapped_model,
+                        step=self._ckpt.global_step
+                    )
 
             with torch.autograd.profiler.record_function('update_lr_params'):
                 self.update_training_status()
@@ -343,8 +347,10 @@ class Launcher(object):
                     self._logger.info(self.model_dir)
 
                 if summary_weights and self._ckpt.global_step % tensorboard_interval_step == 0:
-                    self._logger.summary_weights(module=self.unwrapped_model,
-                                                 step=self._ckpt.global_step)
+                    self._logger.summary_weights(
+                        module=self.unwrapped_model,
+                        step=self._ckpt.global_step
+                    )
 
         del iterator
         self.run_callbacks('after_train')
@@ -379,8 +385,11 @@ class Launcher(object):
             for k, v in model_extra_info.items():
                 self._logger.equation(k, v)
 
-        signal_loss_dict = self.train_iters(train_data_loader,
-                                            test_data_loader=test_data_loader, **config)
+        signal_loss_dict = self.train_iters(
+            train_data_loader,
+            test_data_loader=test_data_loader,
+            **config
+        )
 
         return signal_loss_dict
 

@@ -51,6 +51,7 @@ def make_model(config):
     if model_type in registry.MODEL:
         if issubclass(registry.MODEL[model_type], ERModule):
             model = registry.MODEL[model_type](config['params'])
+            model.init_from_weight_file()
         elif issubclass(registry.MODEL[model_type], Module):
             model = registry.MODEL[model_type](**config['params'])
         else:

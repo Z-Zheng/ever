@@ -51,6 +51,7 @@ def build_from_model_dir(model_dir, checkpoint_name=None):
             model = build_from_file(cfg_path)
             model.eval()
             weights = torch.load(os.path.join(model_dir, 'model-best.pth'), map_location=lambda storage, loc: storage)
+            weights = checkpoint.remove_module_prefix(weights)
             model.load_state_dict(weights)
             info('[Load params] from {}'.format(os.path.join(model_dir, 'model-best.pth')))
             return model, 'best'
