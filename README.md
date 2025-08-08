@@ -25,6 +25,10 @@ pip install ever-beta
 pip install --upgrade git+https://github.com/Z-Zheng/ever.git
 ```
 
+### conda-forge
+```bash
+conda install -c conda-forge ever-beta
+```
 
 ## Getting Started
 [Basic Usage](https://github.com/Z-Zheng/ever/tree/master/docs/USAGE.md)
