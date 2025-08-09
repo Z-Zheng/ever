@@ -136,9 +136,10 @@ class Logger(object):
         return wandb.run is not None
 
     @main_process_only
-    def init_wandb(self, project, name, wandb_dir, config=None):
+    def init_wandb(self, entity, project, name, wandb_dir, config=None):
         wandb.login()
         wandb.init(
+            entity=entity,
             project=project,
             dir=wandb_dir,
             name=name,

@@ -30,6 +30,8 @@ def get_default_parser():
                         help='whether to use wandb for logging')
     parser.add_argument('--project', default=None, type=str,
                         help='Project name for init wandb')
+    parser.add_argument('--entity', default=None, type=str,
+                        help='Entity for init wandb. The username or team name under which the runs will be logged')
 
     # command line options
     parser.add_argument(

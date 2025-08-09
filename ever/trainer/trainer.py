@@ -161,7 +161,12 @@ class Trainer(object):
 
         if self.args.use_wandb:
             name = self.args.model_dir
-            tl.logger.init_wandb(project=self.args.project, name=name, wandb_dir=self.args.model_dir)
+            tl.logger.init_wandb(
+                entity=self.args.entity,
+                project=self.args.project,
+                name=name,
+                wandb_dir=self.args.model_dir
+            )
 
         kw_dataloader = self.make_dataloader()
 
