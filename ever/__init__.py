@@ -29,5 +29,5 @@ __all__ = [
     'sliding_window',
 ]
 
-__internal_version__ = '2.5.2'
-__version__ = "0.5.2"
+__internal_version__ = '2.5.3'
+__version__ = "0.5.3"
