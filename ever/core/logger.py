@@ -108,13 +108,14 @@ class TrainLogHook(metaclass=ABCMeta):
         return NotImplementedError
 
 
-class Logger(object):
-    def __init__(self,
-                 name,
-                 level=logging.INFO,
-                 use_tensorboard=False,
-                 tensorboard_logdir=None,
-                 ):
+class Logger:
+    def __init__(
+            self,
+            name,
+            level=logging.INFO,
+            use_tensorboard=False,
+            tensorboard_logdir=None,
+    ):
         self._level = level
         self._logger = get_console_file_logger(name, level, tensorboard_logdir)
         self.use_tensorboard = use_tensorboard
