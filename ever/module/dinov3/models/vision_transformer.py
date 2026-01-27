@@ -11,6 +11,7 @@ import torch
 import torch.nn.init
 from torch import Tensor, nn
 
+import ever as er
 from ever.module.dinov3.layers import LayerScale, Mlp, PatchEmbed, RMSNorm, RopePositionEmbedding, SelfAttentionBlock, SwiGLUFFN
 from ever.module.dinov3.utils import named_apply
 
@@ -24,6 +25,8 @@ __all__ = [
     'vit_huge2',
     'vit_giant2',
     'vit_7b',
+    'vitl16_sat493m',
+    'vit7b16_sat493m',
 ]
 
 logger = logging.getLogger("dinov3")
@@ -421,4 +424,53 @@ def vit_7b(patch_size=16, **kwargs):
         ffn_ratio=3,
         **kwargs,
     )
+    return model
+
+
+def vitl16_sat493m(pretrained=None, drop_path_rate=0., **kwargs):
+    model = vit_large(
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-05,
+        norm_layer="layernormbf16",
+        ffn_layer="mlp",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
+        untie_global_and_local_cls_norm=True,
+        **kwargs
+    )
+    if pretrained is not None:
+        msg = model.load_state_dict(torch.load(pretrained, map_location="cpu", weights_only=False))
+        er.info(f"load checkpoint from {pretrained}: {msg}")
+    return model
+
+
+def vit7b16_sat493m(pretrained=None, drop_path_rate=0.4, **kwargs):
+    model = vit_7b(
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        embed_dim=4096,
+        qkv_bias=False,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-05,
+        norm_layer="layernormbf16",
+        ffn_layer="swiglu64",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
+        untie_global_and_local_cls_norm=True,
+        **kwargs
+    )
+    if pretrained is not None:
+        msg = model.load_state_dict(torch.load(pretrained, map_location="cpu", weights_only=False))
+        er.info(f"load checkpoint from {pretrained}: {msg}")
     return model
