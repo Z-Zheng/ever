@@ -35,7 +35,7 @@ def half_bn(m):
         m.half()
 
 
-class Trainer(object):
+class Trainer:
     def __init__(self, args):
         self._args = args
         self._cfg = config.import_config(self.args.config_path)
@@ -70,8 +70,10 @@ class Trainer(object):
     def cfg(self):
         return self._cfg
 
-    def make_model(self):
-        model = make_model(self.config.model)
+    def make_model(self, model_fn=None):
+        if model_fn is None:
+            model_fn = lambda x: x
+        model = model_fn(make_model(self.config.model))
         return model
 
     def make_dataloader(self):
@@ -79,12 +81,17 @@ class Trainer(object):
         testdata_loader = make_dataloader(self.config.data.test) if 'test' in self.config.data else None
         return dict(traindata_loader=traindata_loader, testdata_loader=testdata_loader)
 
-    def make_lr_optimizer(self, params):
+    def make_lr_optimizer(self, params, lr_fn=None, optimizer_fn=None):
+        if lr_fn is None:
+            lr_fn = lambda x: x
+        if optimizer_fn is None:
+            optimizer_fn = lambda x: x
+
         # case1: single lr, single opt
         if hasattr(self.config.learning_rate, 'type') and hasattr(self.config.optimizer, 'type'):
-            lr_schedule = make_learningrate(self.config.learning_rate)
+            lr_schedule = lr_fn(make_learningrate(self.config.learning_rate))
             self.config.optimizer.params['lr'] = lr_schedule.base_lr
-            optimizer = make_optimizer(self.config.optimizer, params=params)
+            optimizer = optimizer_fn(make_optimizer(self.config.optimizer, params=params))
             return dict(lr_schedule=lr_schedule, optimizer=optimizer)
 
         # case2: multiple lr, multiple opt
@@ -101,9 +108,9 @@ class Trainer(object):
                 lr_cfg = self.config.learning_rate[k]
                 sub_params = params[k]
 
-                lr_schedule = make_learningrate(lr_cfg)
+                lr_schedule = lr_fn(make_learningrate(lr_cfg))
                 opt_cfg.params['lr'] = lr_schedule.base_lr
-                optimizer = make_optimizer(opt_cfg, params=sub_params)
+                optimizer = optimizer_fn(make_optimizer(opt_cfg, params=sub_params))
 
                 ret['lr_schedule'][k] = lr_schedule
                 ret['optimizer'][k] = optimizer
@@ -136,12 +143,12 @@ class Trainer(object):
 
         return dict(config=self.config, launcher=tl)
 
-    def build_launcher(self):
+    def build_launcher(self, model_fn=None, optimizer_fn=None, lr_fn=None):
         kwargs = dict(
             model_dir=self.args.model_dir,
-            model=self.make_model().to(self.device)
+            model=self.make_model(model_fn=model_fn).to(self.device)
         )
-        kwargs.update(self.make_lr_optimizer(kwargs['model'].custom_param_groups()))
+        kwargs.update(self.make_lr_optimizer(kwargs['model'].custom_param_groups(), lr_fn=lr_fn, optimizer_fn=optimizer_fn))
         tl = Launcher(**kwargs)
 
         return dict(config=self.config, launcher=tl)
@@ -153,11 +160,40 @@ class Trainer(object):
                 cbs.append(make_callback(cfg))
         return cbs
 
-    def run(self, after_construct_launcher_callbacks=None):
+    def run(
+            self,
+            after_construct_launcher_callbacks=None,
+            model_fn=None,
+            optimizer_fn=None,
+            lr_fn=None
+    ):
+        kw_dataloader = self.make_dataloader()
+        return self.train_with_dataloader(
+            kw_dataloader['traindata_loader'],
+            kw_dataloader['testdata_loader'],
+            after_construct_launcher_callbacks=after_construct_launcher_callbacks,
+            model_fn=model_fn,
+            optimizer_fn=optimizer_fn,
+            lr_fn=lr_fn,
+        )
+
+    def train_with_dataloader(
+            self,
+            train_dataloader,
+            test_dataloader=None,
+            after_construct_launcher_callbacks=None,
+            model_fn=None,
+            optimizer_fn=None,
+            lr_fn=None,
+    ):
         if self.args.opts:
             self.config.update_from_list(self.args.opts)
 
-        tl = self.build_launcher()['launcher']
+        tl = self.build_launcher(
+            model_fn=model_fn,
+            optimizer_fn=optimizer_fn,
+            lr_fn=lr_fn
+        )['launcher']
 
         if self.args.use_wandb:
             name = self.args.model_dir
@@ -167,8 +203,6 @@ class Trainer(object):
                 name=name,
                 wandb_dir=self.args.model_dir
             )
-
-        kw_dataloader = self.make_dataloader()
 
         param_util.trainable_parameters(tl.model, tl.logger)
         param_util.count_model_parameters(tl.model, tl.logger)
@@ -191,43 +225,9 @@ class Trainer(object):
         tl.info(f'config: {self.config}')
         # start training
         tl.train_by_config(
-            kw_dataloader['traindata_loader'],
-            config=merge_dict(self.config.train, self.config.test),
-            test_data_loader=kw_dataloader['testdata_loader']
-        )
-
-        return dict(config=self.config, launcher=tl)
-
-    def run_with_dataloader(self,
-                            train_dataloader,
-                            test_dataloader=None,
-                            after_construct_launcher_callbacks=None):
-        if self.args.opts:
-            self.config.update_from_list(self.args.opts)
-
-        tl = self.build_launcher()['launcher']
-
-        if self.args.use_wandb:
-            name = self.args.model_dir
-            tl.logger.init_wandb(project=self.args.project, name=name, wandb_dir=self.args.model_dir)
-
-        param_util.trainable_parameters(tl.model, tl.logger)
-        param_util.count_model_parameters(tl.model, tl.logger)
-
-        if after_construct_launcher_callbacks is not None:
-            for f in after_construct_launcher_callbacks:
-                f(tl)
-
-        tl.logger.info('th sync bn: {}'.format('on' if self.config.train.get('sync_bn', False) else 'off'))
-        tl.logger.info('external parameter: {}'.format(self.args.opts))
-
-        tl.train_by_config(
             train_dataloader,
-            config=merge_dict(
-                self.config.train,
-                self.config.test
-            ),
-            test_data_loader=test_dataloader
+            config=self.config.train,
+            test_data_loader=test_dataloader,
         )
 
         return dict(config=self.config, launcher=tl)
