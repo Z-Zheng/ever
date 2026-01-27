@@ -1,4 +1,5 @@
 import importlib
+import importlib.util
 import os
 import pprint
 import sys
@@ -37,6 +38,15 @@ def from_dict(dict):
     ad = AttrDict()
     ad.update(dict)
     return ad
+
+
+def to_dict(obj):
+    if isinstance(obj, dict):
+        return {k: to_dict(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [to_dict(v) for v in obj]
+    else:
+        return obj
 
 
 def from_pickle(filepath):
@@ -107,3 +117,6 @@ class AttrDict(OrderedDict):
     def to_pickle(self, filepath):
         with open(filepath, 'wb') as f:
             pickle.dump(self, f)
+
+    def to_dict(self):
+        return to_dict(self)
