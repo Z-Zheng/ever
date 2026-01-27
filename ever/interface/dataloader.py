@@ -55,7 +55,7 @@ class ERDataset(Dataset, ConfigurableMixin):
     def set_default_config(self):
         return NotImplementedError
 
-    def to_dataloader(self):
+    def to_dataloader(self, batch_size=None, num_workers=None, prefetch_factor=None, persistent_workers=None, pin_memory=None):
         sampler = self.SUPPORT_SAMPLERS[self.config.sampler_type](self)
 
         if self.config.total_batch_size > 0:
@@ -66,12 +66,18 @@ class ERDataset(Dataset, ConfigurableMixin):
             self.config.batch_size = self.config.total_batch_size // num_processors
             info(f'using [`total_batch_size` = {self.config.total_batch_size}, `num_processors` = {num_processors}] instead of `batch_size`')
 
+        batch_size = batch_size or self.config.batch_size
+        num_workers = num_workers or self.config.num_workers
+        prefetch_factor = prefetch_factor or self.config.prefetch_factor
+        persistent_workers = persistent_workers or self.config.persistent_workers
+        pin_memory = pin_memory or self.config.pin_memory
+
         return DataLoader(
             dataset=self,
             sampler=sampler,
-            batch_size=self.config.batch_size,
-            num_workers=self.config.num_workers,
-            prefetch_factor=self.config.prefetch_factor,
-            persistent_workers=self.config.persistent_workers,
-            pin_memory=self.config.pin_memory,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers,
+            pin_memory=pin_memory,
         )
