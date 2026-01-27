@@ -6,7 +6,10 @@ def to_tensor(blob):
     if isinstance(blob, np.ndarray):
         return torch.from_numpy(blob)
     if isinstance(blob, int) or isinstance(blob, float):
-        return torch.Tensor(blob)
+        # ``torch.Tensor(blob)`` interprets ``blob`` as a size and returns an
+        # uninitialized tensor when ``blob`` is a scalar. ``torch.tensor``
+        # correctly creates a 0-dim tensor containing the scalar value.
+        return torch.tensor(blob)
 
     if isinstance(blob, dict):
         ts = {}
