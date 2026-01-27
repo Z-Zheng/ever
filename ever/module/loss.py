@@ -36,6 +36,7 @@ def select(y_pred: torch.Tensor, y_true: torch.Tensor, ignore_index: int):
     return y_pred, y_true
 
 
+@torch.compiler.disable
 def dice_coeff(y_pred, y_true, weights: torch.Tensor, smooth_value: float = 1.0, sync_statistics=True):
     y_pred = y_pred[:, weights]
     y_true = y_true[:, weights]
@@ -49,13 +50,15 @@ def dice_coeff(y_pred, y_true, weights: torch.Tensor, smooth_value: float = 1.0,
     return ((2 * inter + smooth_value) / z).mean()
 
 
-def dice_loss_with_logits(y_pred: torch.Tensor, y_true: torch.Tensor,
-                          smooth_value: float = 1.0,
-                          ignore_index: int = 255,
-                          ignore_channel: int = -1,
-                          *,
-                          sync_statistics=True,
-                          ):
+def dice_loss_with_logits(
+        y_pred: torch.Tensor,
+        y_true: torch.Tensor,
+        smooth_value: float = 1.0,
+        ignore_index: int = 255,
+        ignore_channel: int = -1,
+        *,
+        sync_statistics=True,
+):
     c = y_pred.size(1)
     y_pred, y_true = select(y_pred, y_true, ignore_index)
     weight = torch.as_tensor([True] * c, device=y_pred.device)
