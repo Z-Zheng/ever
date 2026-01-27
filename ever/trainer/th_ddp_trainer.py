@@ -10,18 +10,17 @@ from ever.core.launcher import Launcher
 class THDDPTrainer(trainer.Trainer):
     def __init__(self, args):
         super().__init__(args)
-
         if torch.cuda.is_available():
             torch.cuda.set_device(self.args.local_rank)
             dist.init_process_group(
                 backend="nccl", init_method="env://"
             )
 
-    def make_model(self):
-        model = super(THDDPTrainer, self).make_model()
+    def make_model(self, model_fn=None):
+        model = super(THDDPTrainer, self).make_model(model_fn=model_fn)
         if self.config.train.get('sync_bn', False):
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = self.torch_compile(model)
+
         model = model.to(self.device)
         model = nn.parallel.DistributedDataParallel(
             model,
@@ -29,13 +28,13 @@ class THDDPTrainer(trainer.Trainer):
             output_device=self.args.local_rank,
             find_unused_parameters=self.args.find_unused_parameters,
         )
+        model = self.torch_compile(model)
         return model
 
-    def build_launcher(self):
+    def build_launcher(self, model_fn=None, optimizer_fn=None, lr_fn=None):
         kwargs = dict(model_dir=self.args.model_dir, mixed_precision=self.args.mixed_precision)
-        kwargs.update(dict(model=self.make_model()))
-        kwargs.update(
-            self.make_lr_optimizer(kwargs['model'].module.custom_param_groups()))
+        kwargs.update(dict(model=self.make_model(model_fn=model_fn)))
+        kwargs.update(self.make_lr_optimizer(kwargs['model'].module.custom_param_groups(), lr_fn=lr_fn, optimizer_fn=optimizer_fn))
         tl = Launcher(**kwargs)
 
         return dict(config=self.config, launcher=tl)
