@@ -28,14 +28,15 @@ from .device import auto_device
 __all__ = ['Launcher', ]
 
 
-class Launcher(object):
-    def __init__(self,
-                 model_dir,
-                 model,
-                 optimizer,
-                 lr_schedule,
-                 mixed_precision,
-                 ):
+class Launcher:
+    def __init__(
+            self,
+            model_dir,
+            model,
+            optimizer,
+            lr_schedule,
+            mixed_precision,
+    ):
         if mixed_precision == 'fp32':
             self._mixed_precision = torch.float32
             self._amp = False
@@ -104,12 +105,17 @@ class Launcher(object):
     @property
     def unwrapped_model(self):
         model = self._model
-        if isinstance(self._model, DistributedDataParallel):
-            model = model.module
-        if version.parse(torch.__version__) < version.parse("2.0") or not hasattr(torch, "_dynamo"):
-            return model
-        if isinstance(model, torch._dynamo.eval_frame.OptimizedModule):
-            model = model._orig_mod
+
+        while True:
+            if isinstance(model, DistributedDataParallel):
+                model = model.module
+                continue
+
+            if hasattr(model, "_orig_mod"):
+                model = model._orig_mod
+                continue
+
+            break
 
         return model
 
@@ -239,10 +245,12 @@ class Launcher(object):
                 else:
                     f.func()
 
-    def train_iters(self,
-                    train_data_loader,
-                    test_data_loader=None,
-                    **kwargs):
+    def train_iters(
+            self,
+            train_data_loader,
+            test_data_loader=None,
+            **kwargs
+    ):
         distributed = kwargs.get('distributed', False)
 
         num_iters = kwargs.get('num_iters', -1)
@@ -312,8 +320,9 @@ class Launcher(object):
                     for sub_data in data:
                         msg_dict = self.compute_loss_gradient(sub_data, len(data))
 
-                self.unwrapped_model.apply_gradients(self.optimizer, self._amp, scaler=self.scaler)
+                grad_info = self.unwrapped_model.apply_gradients(self.optimizer, self._amp, scaler=self.scaler)
 
+            msg_dict |= grad_info
             msg_dict = self.log_info_dict(msg_dict)
             signal_loss_dict = msg_dict.copy()
 
@@ -373,9 +382,9 @@ class Launcher(object):
             self._logger.info(f'mixed precision type: {self._mixed_precision}')
             self._logger.equation('num_samples', num_samples)
             self._logger.equation('batch_size_per_gpu', train_data_loader.batch_sampler.batch_size)
-            self._logger.forward_times(config['forward_times'])
+            self._logger.forward_times(config.get('forward_times', 1))
             self._logger.approx_equation('num_epochs',
-                                         round(config['forward_times'] * config['num_iters'] / len(train_data_loader), 1))
+                                         round(config.get('forward_times', 1) * config['num_iters'] / len(train_data_loader), 1))
             self._logger.equation('num_iters', config['num_iters'])
             self._logger.equation('optimizer', self.optimizer)
 
