@@ -22,7 +22,13 @@ def get_rank():
 
 
 def is_main_process():
-    return get_rank() == 0
+    if dist.is_available() and dist.is_initialized():
+        return dist.get_rank() == 0
+
+    if 'RANK' in os.environ:
+        return int(os.environ['RANK']) == 0
+
+    return True
 
 
 def init_dist_env():
