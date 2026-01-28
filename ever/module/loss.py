@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
+from torch.distributed.nn import all_reduce as _all_reduce
 from ever.core.dist import get_world_size
 from typing import Union
 from einops import rearrange
@@ -16,10 +17,10 @@ def _masked_ignore(y_pred: torch.Tensor, y_true: torch.Tensor, ignore_index: int
     return y_pred, y_true
 
 
-def all_reduce_mean(data):
+def all_reduce_sum(data):
     if get_world_size() == 1:
         return data
-    dist.all_reduce(data, op=dist.ReduceOp.AVG)
+    return _all_reduce(data, op=dist.ReduceOp.SUM)
 
 
 @torch.jit.script
@@ -43,8 +44,8 @@ def dice_coeff(y_pred, y_true, weights: torch.Tensor, smooth_value: float = 1.0,
     inter = torch.sum(y_pred * y_true, dim=0)
     z = y_pred.sum(dim=0) + y_true.sum(dim=0)
     if sync_statistics:
-        all_reduce_mean(inter)
-        all_reduce_mean(z)
+        inter = all_reduce_sum(inter)
+        z = all_reduce_sum(z)
     z += smooth_value
 
     return ((2 * inter + smooth_value) / z).mean()
@@ -128,8 +129,8 @@ def _1d_tversky_loss_with_logits(
     denominator = tp + alpha * fn + beta * fp
 
     if sync_statistics:
-        all_reduce_mean(numerator)
-        all_reduce_mean(denominator)
+        numerator = all_reduce_sum(numerator)
+        denominator = all_reduce_sum(denominator)
 
     numerator += smooth_value
     denominator += smooth_value
