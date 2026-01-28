@@ -4,12 +4,12 @@ from torch.optim.adamw import AdamW
 
 from ..core import registry
 
-registry.OPT.register('sgd', SGD)
-registry.OPT.register('adam', Adam)
-registry.OPT.register('adamw', AdamW)
+registry.OPT.register('sgd', SGD, verbose=False)
+registry.OPT.register('adam', Adam, verbose=False)
+registry.OPT.register('adamw', AdamW, verbose=False)
 try:
     from apex.optimizers import FusedAdam
 
-    registry.OPT.register('fused_adam', FusedAdam)
+    registry.OPT.register('fused_adam', FusedAdam, verbose=False)
 except ImportError:
     pass
