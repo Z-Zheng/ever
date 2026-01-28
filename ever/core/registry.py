@@ -1,12 +1,16 @@
 # modified from https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/utils/registry.py
+import os
 import logging
 import importlib
 import sys
+import inspect
+from ever.core.dist import is_main_process
 from ever.core.logger import info
 
 logging.basicConfig(level=logging.INFO)
 
 __all__ = ['Registry', 'LR', 'OPT', 'DATALOADER', 'MODEL', 'LOSS', 'OP']
+_EVER_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # from https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
@@ -19,11 +23,23 @@ def _import_file(module_name, file_path, make_importable=False):
     return module
 
 
-def _register_generic(module_dict, module_name, module, override=False):
+def _register_generic(module_dict, module_name, module, override=False, verbose=True):
     module_name = module_name if module_name else module.__name__
-    if not override:
-        if module_name in module_dict:
-            logging.warning('{} has been in module_dict.'.format(module_name))
+
+    if is_main_process():
+        if not override:
+            if module_name in module_dict:
+                logging.warning('{} has been in module_dict.'.format(module_name))
+
+        if verbose:
+            try:
+                source_file = inspect.getfile(module)
+                if not source_file.startswith(_EVER_ROOT):
+                    info(f'{module_name:<20} is registered from {source_file}')
+            except (TypeError, OSError):
+                # fallback
+                info('<{}> registered (source unknown)'.format(module_name))
+
     module_dict[module_name] = module
 
 
@@ -55,15 +71,15 @@ class Registry(dict):
     def __init__(self, *args, **kwargs):
         super(Registry, self).__init__(*args, **kwargs)
 
-    def register(self, module_name=None, module=None, override=False):
+    def register(self, module_name=None, module=None, override=False, verbose=True):
         # used as function call
         if module is not None:
-            _register_generic(self, module_name, module, override)
+            _register_generic(self, module_name, module, override, verbose)
             return
 
         # used as decorator
         def register_fn(fn):
-            _register_generic(self, module_name, fn, override)
+            _register_generic(self, module_name, fn, override, verbose)
             return fn
 
         return register_fn
