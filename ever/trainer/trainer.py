@@ -8,7 +8,7 @@ from ever.core.builder import make_learningrate
 from ever.core.builder import make_model
 from ever.core.builder import make_optimizer
 from ever.core.builder import make_callback
-from ever.core.launcher import Launcher
+from ever.core.context import TrainingContext
 
 from ever.util import param_util
 
@@ -119,7 +119,7 @@ class Trainer:
         raise ValueError('Only support (single lr, single opt) and (multiple lr, multiple opt)')
 
     def evaluate(self, test_config=None, after_construct_launcher_callbacks=None):
-        tl = self.build_launcher()['launcher']
+        tl = self.setup_training_context()['launcher']
 
         param_util.trainable_parameters(tl.model, tl.logger)
         param_util.count_model_parameters(tl.model, tl.logger)
@@ -143,15 +143,15 @@ class Trainer:
 
         return dict(config=self.config, launcher=tl)
 
-    def build_launcher(self, model_fn=None, optimizer_fn=None, lr_fn=None):
+    def setup_training_context(self, model_fn=None, optimizer_fn=None, lr_fn=None):
         kwargs = dict(
             model_dir=self.args.model_dir,
             model=self.make_model(model_fn=model_fn).to(self.device)
         )
         kwargs.update(self.make_lr_optimizer(kwargs['model'].custom_param_groups(), lr_fn=lr_fn, optimizer_fn=optimizer_fn))
-        tl = Launcher(**kwargs)
+        ctx = TrainingContext(**kwargs)
 
-        return dict(config=self.config, launcher=tl)
+        return dict(config=self.config, context=ctx)
 
     def build_callbacks(self):
         cbs = []
@@ -162,7 +162,7 @@ class Trainer:
 
     def run(
             self,
-            after_construct_launcher_callbacks=None,
+            after_setup_context_callbacks=None,
             model_fn=None,
             optimizer_fn=None,
             lr_fn=None
@@ -171,7 +171,7 @@ class Trainer:
         return self.train_with_dataloader(
             kw_dataloader['traindata_loader'],
             kw_dataloader['testdata_loader'],
-            after_construct_launcher_callbacks=after_construct_launcher_callbacks,
+            after_setup_context_callbacks=after_setup_context_callbacks,
             model_fn=model_fn,
             optimizer_fn=optimizer_fn,
             lr_fn=lr_fn,
@@ -181,7 +181,7 @@ class Trainer:
             self,
             train_dataloader,
             test_dataloader=None,
-            after_construct_launcher_callbacks=None,
+            after_setup_context_callbacks=None,
             model_fn=None,
             optimizer_fn=None,
             lr_fn=None,
@@ -189,48 +189,48 @@ class Trainer:
         if self.args.opts:
             self.config.update_from_list(self.args.opts)
 
-        tl = self.build_launcher(
+        ctx = self.setup_training_context(
             model_fn=model_fn,
             optimizer_fn=optimizer_fn,
             lr_fn=lr_fn
-        )['launcher']
+        )['context']
 
         if self.args.use_wandb:
             name = self.args.model_dir
-            tl.logger.init_wandb(
+            ctx.logger.init_wandb(
                 entity=self.args.entity,
                 project=self.args.project,
                 name=name,
                 wandb_dir=self.args.model_dir
             )
 
-        param_util.trainable_parameters(tl.model, tl.logger)
-        param_util.count_model_parameters(tl.model, tl.logger)
+        param_util.trainable_parameters(ctx.model, ctx.logger)
+        param_util.count_model_parameters(ctx.model, ctx.logger)
 
         for c in self.build_callbacks():
             self.register_callback(c)
 
         for c in self._callbacks:
-            tl.info(f'callback: {c}')
-            tl.register_callback(c)
+            ctx.info(f'callback: {c}')
+            ctx.register_callback(c)
 
-        if after_construct_launcher_callbacks is not None:
-            for f in after_construct_launcher_callbacks:
-                f(tl)
+        if after_setup_context_callbacks is not None:
+            for f in after_setup_context_callbacks:
+                f(ctx)
 
-        tl.info('th sync bn: {}'.format(
+        ctx.info('th sync bn: {}'.format(
             'True' if self.config.train.get('sync_bn', False) else 'False'))
-        tl.info('external parameter: {}'.format(self.args.opts))
+        ctx.info('external parameter: {}'.format(self.args.opts))
 
-        tl.info(f'config: {self.config}')
+        ctx.info(f'config: {self.config}')
         # start training
-        tl.train_by_config(
+        ctx.train_by_config(
             train_dataloader,
             config=self.config.train,
             test_data_loader=test_dataloader,
         )
 
-        return dict(config=self.config, launcher=tl)
+        return dict(config=self.config, context=ctx)
 
     def register_callback(self, callback):
         self._callbacks.append(callback)
@@ -239,6 +239,17 @@ class Trainer:
         self._callbacks.clear()
 
     def torch_compile(self, model):
-        if 'torch_compile' in self.config.train:
-            model = torch.compile(model, **self.config.train.torch_compile)
+        if 'torch_compile' not in self.config.train:
+            return model
+
+        compile_config = self.config.train.torch_compile
+        if compile_config is False or compile_config is None:
+            return model
+        if compile_config is True:
+            compile_config = {}
+
+        if hasattr(model, 'compile_model'):
+            model = model.compile_model(compile_config)
+        else:
+            model = torch.compile(model, **compile_config)
         return model

@@ -3,14 +3,15 @@ import functools
 import os
 import torch
 import torch.distributed as dist
+import torch.distributed.nn as nn_dist
 
 
-def get_world_size():
+def get_world_size(group=None):
     if not dist.is_available():
         return 1
     if not dist.is_initialized():
         return 1
-    return dist.get_world_size()
+    return dist.get_world_size(group)
 
 
 def get_rank():
@@ -112,6 +113,14 @@ def all_gather(data, group=None):
 
     output = [None for _ in range(world_size)]
     dist.all_gather_object(output, data, group=group)
+    return output
+
+
+def all_gather_tensor(data, group=None):
+    if get_world_size() == 1:
+        return [data]
+
+    output = nn_dist.all_gather(data)
     return output
 
 

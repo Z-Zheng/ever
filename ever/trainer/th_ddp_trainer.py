@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 
 from ever.trainer import trainer
-from ever.core.launcher import Launcher
+from ever.core.context import TrainingContext
 
 
 class THDDPTrainer(trainer.Trainer):
@@ -31,16 +31,16 @@ class THDDPTrainer(trainer.Trainer):
         model = self.torch_compile(model)
         return model
 
-    def build_launcher(self, model_fn=None, optimizer_fn=None, lr_fn=None):
+    def setup_training_context(self, model_fn=None, optimizer_fn=None, lr_fn=None):
         kwargs = dict(model_dir=self.args.model_dir, mixed_precision=self.args.mixed_precision)
         kwargs.update(dict(model=self.make_model(model_fn=model_fn)))
         kwargs.update(self.make_lr_optimizer(kwargs['model'].module.custom_param_groups(), lr_fn=lr_fn, optimizer_fn=optimizer_fn))
-        tl = Launcher(**kwargs)
+        ctx = TrainingContext(**kwargs)
 
-        return dict(config=self.config, launcher=tl)
+        return dict(config=self.config, context=ctx)
 
 
-class GANLauncher(Launcher):
+class GANTrainingContext(TrainingContext):
     def compute_loss_gradient(self, data, forward_times=1):
         with autocast(enabled=self._amp, dtype=self._mixed_precision):
             msg_dict = self.model.forward_backward(data, optimizer=self.optimizer, scaler=self.scaler)
@@ -80,11 +80,11 @@ class THDDPGANTrainer(trainer.Trainer):
         )
         return model
 
-    def build_launcher(self):
+    def setup_training_context(self):
         kwargs = dict(model_dir=self.args.model_dir, mixed_precision=self.args.mixed_precision)
         kwargs.update(dict(model=self.make_model()))
         kwargs.update(
             self.make_lr_optimizer(kwargs['model'].custom_param_groups()))
-        tl = GANLauncher(**kwargs)
+        ctx = GANTrainingContext(**kwargs)
 
-        return dict(config=self.config, launcher=tl)
+        return dict(config=self.config, context=ctx)

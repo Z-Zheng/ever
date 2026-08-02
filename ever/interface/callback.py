@@ -9,7 +9,7 @@ class Callback:
     ):
         self._epoch_interval = epoch_interval
         self._only_master = only_master
-        self._launcher = None
+        self._context = None
         self._prior = prior
 
         self.before_train = before_train
@@ -34,57 +34,59 @@ class Callback:
         return self._prior
 
     @property
-    def launcher(self):
-        return self._launcher
+    def train_context(self):
+        return self._context
 
-    def set_launcher(self, launcher):
-        self._launcher = launcher
+    def set_train_context(self, context):
+        self._context = context
 
     @property
     def model(self):
-        return self._launcher.model
+        return self._context.model
 
     @property
     def model_without_ddp(self):
-        return self._launcher.model_without_ddp
+        return self._context.model_without_ddp
 
     @property
     def unwrapped_model(self):
-        return self._launcher.unwrapped_model
+        return self._context.unwrapped_model
 
     @property
     def model_dir(self):
-        return self._launcher.model_dir
+        return self._context.model_dir
 
     @property
     def global_step(self):
-        return self._launcher.global_step
+        return self._context.global_step
 
     @property
     def learning_rate(self):
-        return self._launcher.lr
+        return self._context.lr
 
     @property
     def logger(self):
-        return self._launcher.logger
+        return self._context.logger
 
     def info(self, msg):
-        self._launcher.info(msg)
+        self._context.info(msg)
 
     def save_model(self, filename=None):
-        self._launcher.save_model(filename)
+        self._context.save_model(filename)
 
 
 class SaveCheckpointCallback(Callback):
-    def __init__(self, epoch_interval: int):
+    def __init__(self, epoch_interval: int, max_keep=None):
         super().__init__(
             epoch_interval=epoch_interval, only_master=True, prior=0,
             before_train=False,
             after_train=True
         )
+        self.max_keep = max_keep
 
     def func(self):
-        self.launcher.checkpoint.save()
+        self.train_context.checkpoint.save()
+        self.train_context.checkpoint.cleanup_checkpoints(self.max_keep)
 
     def name(self):
         return 'SaveCheckpoint'
@@ -107,7 +109,7 @@ class EvaluationCallback(Callback):
         self._config = config
 
     def func(self):
-        self.launcher.evaluate(self._dataloader, config=self._config)
+        self.train_context.evaluate(self._dataloader, config=self._config)
 
     def name(self):
         return 'Evaluation'

@@ -25,14 +25,26 @@ class AccTable(pt.PrettyTable):
     def f1(self, class_index=None):
         return self.get('f1', class_index)
 
+    def mF1(self):
+        return self.f1(-3)
+
     def iou(self, class_index=None):
         return self.get('iou', class_index)
+
+    def mIoU(self):
+        return self.iou(-3)
 
     def precision(self, class_index=None):
         return self.get('precision', class_index)
 
+    def mPrec(self):
+        return self.precision(-3)
+
     def recall(self, class_index=None):
         return self.get('recall', class_index)
+
+    def mRec(self):
+        return self.recall(-3)
 
     def get(self, col_name, row_index):
         idx = self.field_names.index(col_name)

@@ -194,16 +194,18 @@ class Logger:
                     continue
                 self.summary_w.add_histogram('grads/{}'.format(name), p.grad.cpu().data.numpy(), step)
 
-    def train_log(self,
-                  step,
-                  epoch,
-                  loss_dict,
-                  time_cost,
-                  data_time,
-                  lr,
-                  num_iters,
-                  tensorboard_interval_step=100,
-                  log_interval_step=1):
+    def train_log(
+            self,
+            step,
+            epoch,
+            loss_dict,
+            time_cost,
+            data_time,
+            lr,
+            num_iters,
+            tensorboard_interval_step=100,
+            log_interval_step=1
+    ):
         smooth_loss_dict = self.create_or_get_smoothvalues(loss_dict)
         loss_info = ''.join(
             ['{name} = {value}, '.format(name=name, value=str(round(value, 6)).ljust(6, '0')) for name, value in
