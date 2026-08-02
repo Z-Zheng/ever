@@ -30,4 +30,4 @@ __all__ = [
 ]
 
 __internal_version__ = '2.7.0'
-__version__ = "0.6.0"
+__version__ = "0.6.1"

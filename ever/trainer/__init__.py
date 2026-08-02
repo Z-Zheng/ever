@@ -2,12 +2,10 @@ import argparse
 import os
 
 from .th_ddp_trainer import THDDPTrainer, THDDPGANTrainer
-from .th_fsdp2_trainer import THFSDP2Trainer
 from .trainer import Trainer
 
 TRAINER = dict(
     gan_th_ddp=THDDPGANTrainer,
-    th_fsdp2=THFSDP2Trainer,
     th_ddp=THDDPTrainer,
     base=Trainer,
 )
